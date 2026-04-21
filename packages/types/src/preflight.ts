@@ -7,6 +7,7 @@ export type ElevatedAccess = "root" | "sudo" | "none";
 export type PortListener = {
   processName: string | null;
   pid: number | null;
+  command?: string | null;
 };
 
 export type PortStatus = {

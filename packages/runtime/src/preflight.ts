@@ -13,6 +13,7 @@ export type CollectPreflightReportOptions = {
 };
 
 const defaultRequiredPorts = [80, 443];
+const zoneployProcessPattern = /zoneploy-agent|apps\/agent\/dist\/index\.js|apps\\agent\\dist\\index\.js/;
 
 const createConflict = (
   code: string,
@@ -49,6 +50,19 @@ const createCapabilities = (
       !runtimeInfo.dockerSnapInstalled,
     ports: portMap,
   };
+};
+
+const isOwnedByZoneployAgent = (port: PortStatus): boolean => {
+  if (port.listeners.length === 0) {
+    return false;
+  }
+
+  return port.listeners.every((listener) => {
+    const processName = listener.processName ?? "";
+    const command = listener.command ?? "";
+
+    return zoneployProcessPattern.test(processName) || zoneployProcessPattern.test(command);
+  });
 };
 
 export const collectPreflightReport = async (
@@ -107,6 +121,10 @@ export const collectPreflightReport = async (
 
   for (const port of ports) {
     if (!port.available) {
+      if (port.port === agentPort && isOwnedByZoneployAgent(port)) {
+        continue;
+      }
+
       conflicts.push(
         createConflict(
           port.port === agentPort ? "AGENT_PORT_IN_USE" : `PORT_${port.port}_IN_USE`,

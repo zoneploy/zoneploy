@@ -1,14 +1,31 @@
 import type { PortListener, PortStatus } from "@zoneploy/types";
 import { commandExists, runCommand } from "./commands.js";
 
-const parseListener = (line: string): PortListener[] => {
+const readProcessCommand = async (pid: number): Promise<string | null> => {
+  if (process.platform !== "linux") {
+    return null;
+  }
+
+  const result = await runCommand("ps", ["-p", String(pid), "-o", "cmd="], 5_000);
+
+  if (result.exitCode !== 0) {
+    return null;
+  }
+
+  return result.stdout.trim() || null;
+};
+
+const parseListener = async (line: string): Promise<PortListener[]> => {
   const listeners: PortListener[] = [];
   const processMatches = line.matchAll(/users:\(\("([^"]+)",pid=(\d+)/g);
 
   for (const match of processMatches) {
+    const pid = match[2] ? Number(match[2]) : null;
+
     listeners.push({
       processName: match[1] ?? null,
-      pid: match[2] ? Number(match[2]) : null,
+      pid,
+      command: pid ? await readProcessCommand(pid) : null,
     });
   }
 
@@ -53,7 +70,7 @@ const readLinuxTcpListeners = async (): Promise<Map<number, PortListener[]>> => 
       continue;
     }
 
-    listeners.set(port, parseListener(line));
+    listeners.set(port, await parseListener(line));
   }
 
   return listeners;

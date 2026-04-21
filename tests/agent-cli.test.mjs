@@ -69,6 +69,46 @@ test("agent preflight command returns host checks without crashing", () => {
   assert.equal(typeof preflight.summary.errors, "number");
 });
 
+test("agent preflight does not flag its own running server as an agent port conflict", async (t) => {
+  const port = 46_000 + Math.floor(Math.random() * 1_000);
+  const child = spawn("node", ["apps/agent/dist/index.js", "serve"], {
+    env: {
+      ...process.env,
+      ZONEPLOY_AGENT_PORT: String(port),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  t.after(() => {
+    child.kill("SIGTERM");
+  });
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/health`);
+      if (response.ok) {
+        break;
+      }
+    } catch {
+      await sleep(100);
+    }
+  }
+
+  const output = execFileSync("node", ["apps/agent/dist/index.js", "preflight"], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ZONEPLOY_AGENT_PORT: String(port),
+    },
+  });
+  const preflight = JSON.parse(output);
+
+  assert.ok(
+    preflight.conflicts.every((conflict) => conflict.code !== "AGENT_PORT_IN_USE"),
+    "preflight should ignore the running Zoneploy agent process",
+  );
+});
+
 test("agent debug command returns diagnostic sections", () => {
   const debug = runAgent("debug");
 
