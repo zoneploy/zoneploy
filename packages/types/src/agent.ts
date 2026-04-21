@@ -19,6 +19,15 @@ export type AgentServiceStatus = {
   details?: Record<string, unknown>;
 };
 
+export type RuntimeServiceStatus = "unknown" | "missing" | "installed" | "stopped" | "running";
+
+export type RuntimeServiceSummary = {
+  name: "docker" | "docker-daemon" | "traefik";
+  status: RuntimeServiceStatus;
+  version?: string;
+  details?: Record<string, unknown>;
+};
+
 export type AgentStatus = {
   generatedAt: string;
   agentVersion: string;
@@ -26,4 +35,5 @@ export type AgentStatus = {
   health: HealthState;
   capabilities: RuntimeCapability[];
   services: AgentServiceStatus[];
+  runtime: RuntimeServiceSummary[];
 };

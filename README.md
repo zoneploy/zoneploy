@@ -26,7 +26,7 @@ apps/
 packages/
   addons/             Add-on manifests and lifecycle contracts
   installer/          Installer and systemd rendering utilities
-  runtime/            Runtime paths, status and routing primitives
+  runtime/            Host detection, diagnostics, status and routing primitives
   types/              Public contracts shared across packages
 ```
 
@@ -39,6 +39,9 @@ node apps/agent/dist/index.js status
 node apps/agent/dist/index.js routes
 node apps/agent/dist/index.js addons
 node apps/agent/dist/index.js pairing
+node apps/agent/dist/index.js preflight
+node apps/agent/dist/index.js debug
+node apps/agent/dist/index.js audit
 ```
 
 ## License

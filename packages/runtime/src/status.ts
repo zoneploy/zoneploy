@@ -1,9 +1,15 @@
-import type { AgentMode, AgentStatus, RuntimeCapability } from "@zoneploy/types";
+import type {
+  AgentMode,
+  AgentStatus,
+  RuntimeCapability,
+  RuntimeServiceSummary,
+} from "@zoneploy/types";
 
 export type CreateAgentStatusInput = {
   agentVersion: string;
   mode: AgentMode;
   capabilities?: RuntimeCapability[];
+  runtime?: RuntimeServiceSummary[];
 };
 
 export const createAgentStatus = (input: CreateAgentStatusInput): AgentStatus => ({
@@ -13,4 +19,5 @@ export const createAgentStatus = (input: CreateAgentStatusInput): AgentStatus =>
   health: "unknown",
   capabilities: input.capabilities ?? [],
   services: [],
+  runtime: input.runtime ?? [],
 });

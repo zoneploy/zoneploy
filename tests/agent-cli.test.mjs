@@ -18,6 +18,7 @@ test("agent status command returns the public status contract", () => {
   assert.equal(status.health, "unknown");
   assert.ok(Array.isArray(status.capabilities));
   assert.ok(Array.isArray(status.services));
+  assert.ok(Array.isArray(status.runtime));
 });
 
 test("agent addons command returns built-in addon manifests", () => {
@@ -39,4 +40,32 @@ test("agent pairing command is unpaired by default", () => {
   const pairing = runAgent("pairing");
 
   assert.equal(pairing.paired, false);
+});
+
+test("agent preflight command returns host checks without crashing", () => {
+  const preflight = runAgent("preflight");
+
+  assert.equal(typeof preflight.checkedAt, "string");
+  assert.equal(typeof preflight.runtimeInfo, "object");
+  assert.ok(Array.isArray(preflight.ports));
+  assert.equal(typeof preflight.summary.errors, "number");
+});
+
+test("agent debug command returns diagnostic sections", () => {
+  const debug = runAgent("debug");
+
+  assert.equal(debug.agentVersion, "0.0.0");
+  assert.equal(typeof debug.hostname, "string");
+  assert.ok(Array.isArray(debug.runtime));
+  assert.equal(typeof debug.routes, "object");
+});
+
+test("agent audit command returns summarized checks", () => {
+  const audit = runAgent("audit");
+
+  assert.equal(audit.agentVersion, "0.0.0");
+  assert.ok(Array.isArray(audit.sections));
+  assert.equal(typeof audit.summary.pass, "number");
+  assert.equal(typeof audit.summary.warn, "number");
+  assert.equal(typeof audit.summary.fail, "number");
 });

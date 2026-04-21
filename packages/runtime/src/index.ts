@@ -1,4 +1,10 @@
+export * from "./audit.js";
+export * from "./commands.js";
+export * from "./debug.js";
+export * from "./detect.js";
 export * from "./paths.js";
+export * from "./ports.js";
+export * from "./preflight.js";
 export * from "./routes.js";
 export * from "./status.js";
 

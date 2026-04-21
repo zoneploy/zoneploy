@@ -1,11 +1,22 @@
 import { listAvailableAddons } from "./addons.js";
+import { getAuditReport } from "./audit.js";
+import { getDebugReport } from "./debug.js";
 import { getPairingState } from "./pairing.js";
+import { getPreflightReport } from "./preflight.js";
 import { getRouteSnapshot } from "./routes.js";
 import { getAgentStatus } from "./status.js";
 
-type AgentCommand = "status" | "routes" | "addons" | "pairing";
+type AgentCommand = "status" | "routes" | "addons" | "pairing" | "preflight" | "debug" | "audit";
 
-const commands = new Set<AgentCommand>(["status", "routes", "addons", "pairing"]);
+const commands = new Set<AgentCommand>([
+  "status",
+  "routes",
+  "addons",
+  "pairing",
+  "preflight",
+  "debug",
+  "audit",
+]);
 
 const isAgentCommand = (value: string): value is AgentCommand => {
   return commands.has(value as AgentCommand);
@@ -15,18 +26,18 @@ const printJson = (value: unknown): void => {
   console.log(JSON.stringify(value, null, 2));
 };
 
-export const runCli = (argv: string[]): number => {
+export const runCli = async (argv: string[]): Promise<number> => {
   const command = argv[2] ?? "status";
 
   if (!isAgentCommand(command)) {
     console.error(`Unknown command: ${command}`);
-    console.error("Available commands: status, routes, addons, pairing");
+    console.error("Available commands: status, routes, addons, pairing, preflight, debug, audit");
     return 1;
   }
 
   switch (command) {
     case "status":
-      printJson(getAgentStatus());
+      printJson(await getAgentStatus());
       return 0;
     case "routes":
       printJson(getRouteSnapshot());
@@ -36,6 +47,15 @@ export const runCli = (argv: string[]): number => {
       return 0;
     case "pairing":
       printJson(getPairingState());
+      return 0;
+    case "preflight":
+      printJson(await getPreflightReport());
+      return 0;
+    case "debug":
+      printJson(await getDebugReport());
+      return 0;
+    case "audit":
+      printJson(await getAuditReport());
       return 0;
   }
 };
