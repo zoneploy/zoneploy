@@ -9,6 +9,16 @@ ZONEPLOY_CONFIG_DIR="${ZONEPLOY_CONFIG_DIR:-/etc/zoneploy/config}"
 ZONEPLOY_DATA_DIR="${ZONEPLOY_DATA_DIR:-/var/lib/zoneploy}"
 ZONEPLOY_LOG_DIR="${ZONEPLOY_LOG_DIR:-/var/log/zoneploy}"
 ZONEPLOY_AGENT_PORT="${ZONEPLOY_AGENT_PORT:-4000}"
+ZONEPLOY_REGISTRY_HOST="${ZONEPLOY_REGISTRY_HOST:-127.0.0.1}"
+ZONEPLOY_REGISTRY_PORT="${ZONEPLOY_REGISTRY_PORT:-5000}"
+ZONEPLOY_REGISTRY_DIR="${ZONEPLOY_REGISTRY_DIR:-${ZONEPLOY_DATA_DIR}/registry}"
+ZONEPLOY_BUILDS_DIR="${ZONEPLOY_BUILDS_DIR:-${ZONEPLOY_DATA_DIR}/builds}"
+ZONEPLOY_RELEASES_DIR="${ZONEPLOY_RELEASES_DIR:-${ZONEPLOY_DATA_DIR}/releases}"
+ZONEPLOY_APPS_DIR="${ZONEPLOY_APPS_DIR:-${ZONEPLOY_DATA_DIR}/apps}"
+ZONEPLOY_CLEANUP_ENABLED="${ZONEPLOY_CLEANUP_ENABLED:-true}"
+ZONEPLOY_CLEANUP_KEEP_RELEASES="${ZONEPLOY_CLEANUP_KEEP_RELEASES:-5}"
+ZONEPLOY_CLEANUP_KEEP_DAYS="${ZONEPLOY_CLEANUP_KEEP_DAYS:-14}"
+ZONEPLOY_CLEANUP_MAX_REGISTRY_GB="${ZONEPLOY_CLEANUP_MAX_REGISTRY_GB:-20}"
 ZONEPLOY_PROFILE="${ZONEPLOY_PROFILE:-standalone}"
 ZONEPLOY_CLOUD_URL="${ZONEPLOY_CLOUD_URL:-}"
 ZONEPLOY_PAIRING_TOKEN="${ZONEPLOY_PAIRING_TOKEN:-}"
@@ -51,6 +61,7 @@ Commands:
 
 Options:
   --agent-port <port>       Agent HTTP port. Default: 4000
+  --registry-port <port>    Local registry port. Default: 5000
   --ref <git-ref>           Git ref to install. Default: development
   --repo <url>              Git repository URL. Default: https://github.com/zoneploy/zoneploy.git
   --paired                  Configure the agent as paired with Zoneploy Cloud
@@ -79,6 +90,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --ref)
       ZONEPLOY_INSTALL_REF="${2:?--ref requires a value}"
+      shift 2
+      ;;
+    --registry-port)
+      ZONEPLOY_REGISTRY_PORT="${2:?--registry-port requires a value}"
       shift 2
       ;;
     --repo)
@@ -212,6 +227,17 @@ require_supported_host() {
 
   [ "$ZONEPLOY_AGENT_PORT" -ge 1 ] && [ "$ZONEPLOY_AGENT_PORT" -le 65535 ] \
     || fail "ZONEPLOY_AGENT_PORT must be between 1 and 65535."
+
+  case "$ZONEPLOY_REGISTRY_PORT" in
+    ''|*[!0-9]*) fail "ZONEPLOY_REGISTRY_PORT must be a TCP port number." ;;
+  esac
+
+  [ "$ZONEPLOY_REGISTRY_PORT" -ge 1 ] && [ "$ZONEPLOY_REGISTRY_PORT" -le 65535 ] \
+    || fail "ZONEPLOY_REGISTRY_PORT must be between 1 and 65535."
+
+  if [ "$ZONEPLOY_REGISTRY_PORT" = "$ZONEPLOY_AGENT_PORT" ]; then
+    fail "ZONEPLOY_REGISTRY_PORT must be different from ZONEPLOY_AGENT_PORT."
+  fi
 
   if [ "$ZONEPLOY_PROFILE" = "paired" ] && [ -z "$ZONEPLOY_CLOUD_URL" ]; then
     fail "Paired mode requires --cloud-url or ZONEPLOY_CLOUD_URL."
@@ -392,17 +418,28 @@ shell_quote() {
 }
 
 write_env_file() {
-  install -d -m 0755 "$ZONEPLOY_CONFIG_DIR" "$ZONEPLOY_DATA_DIR" "$ZONEPLOY_LOG_DIR"
+  install -d -m 0755 "$ZONEPLOY_CONFIG_DIR" "$ZONEPLOY_DATA_DIR" "$ZONEPLOY_LOG_DIR" \
+    "$ZONEPLOY_REGISTRY_DIR" "$ZONEPLOY_BUILDS_DIR" "$ZONEPLOY_RELEASES_DIR" "$ZONEPLOY_APPS_DIR"
   umask 077
   cat > "$ENV_FILE" <<ENV
 NODE_ENV=production
 ZONEPLOY_PROFILE=$(shell_quote "$ZONEPLOY_PROFILE")
 ZONEPLOY_AGENT_PORT=$(shell_quote "$ZONEPLOY_AGENT_PORT")
+ZONEPLOY_REGISTRY_HOST=$(shell_quote "$ZONEPLOY_REGISTRY_HOST")
+ZONEPLOY_REGISTRY_PORT=$(shell_quote "$ZONEPLOY_REGISTRY_PORT")
 ZONEPLOY_HOME=$(shell_quote "$ZONEPLOY_HOME")
 ZONEPLOY_SOURCE_DIR=$(shell_quote "$ZONEPLOY_SOURCE_DIR")
 ZONEPLOY_CONFIG_DIR=$(shell_quote "$ZONEPLOY_CONFIG_DIR")
 ZONEPLOY_DATA_DIR=$(shell_quote "$ZONEPLOY_DATA_DIR")
 ZONEPLOY_LOG_DIR=$(shell_quote "$ZONEPLOY_LOG_DIR")
+ZONEPLOY_REGISTRY_DIR=$(shell_quote "$ZONEPLOY_REGISTRY_DIR")
+ZONEPLOY_BUILDS_DIR=$(shell_quote "$ZONEPLOY_BUILDS_DIR")
+ZONEPLOY_RELEASES_DIR=$(shell_quote "$ZONEPLOY_RELEASES_DIR")
+ZONEPLOY_APPS_DIR=$(shell_quote "$ZONEPLOY_APPS_DIR")
+ZONEPLOY_CLEANUP_ENABLED=$(shell_quote "$ZONEPLOY_CLEANUP_ENABLED")
+ZONEPLOY_CLEANUP_KEEP_RELEASES=$(shell_quote "$ZONEPLOY_CLEANUP_KEEP_RELEASES")
+ZONEPLOY_CLEANUP_KEEP_DAYS=$(shell_quote "$ZONEPLOY_CLEANUP_KEEP_DAYS")
+ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=$(shell_quote "$ZONEPLOY_CLEANUP_MAX_REGISTRY_GB")
 ZONEPLOY_CLOUD_URL=$(shell_quote "$ZONEPLOY_CLOUD_URL")
 ZONEPLOY_PAIRING_TOKEN=$(shell_quote "$ZONEPLOY_PAIRING_TOKEN")
 ZONEPLOY_INSTANCE_ID=$(shell_quote "$ZONEPLOY_INSTANCE_ID")
@@ -557,6 +594,26 @@ open_agent_port() {
   fi
 }
 
+start_local_registry() {
+  if [ "$ZONEPLOY_SKIP_DOCKER" = "true" ]; then
+    warn "Skipping local registry because Docker installation was skipped."
+    return
+  fi
+
+  install -d -m 0755 "$ZONEPLOY_REGISTRY_DIR"
+
+  docker rm -f zoneploy-registry >/dev/null 2>&1 || true
+  docker run -d \
+    --name zoneploy-registry \
+    --restart unless-stopped \
+    --network zoneploy \
+    -p "${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}:5000" \
+    -v "${ZONEPLOY_REGISTRY_DIR}:/var/lib/registry" \
+    registry:2 >/dev/null
+
+  ok "Local registry is running at http://${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}"
+}
+
 start_agent_service() {
   systemctl enable "$SERVICE_NAME"
   systemctl restart "$SERVICE_NAME"
@@ -592,6 +649,7 @@ uninstall_zoneploy() {
   echo "Uninstalling Zoneploy..."
   systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
   systemctl disable "$SERVICE_NAME" >/dev/null 2>&1 || true
+  docker rm -f zoneploy-registry >/dev/null 2>&1 || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
   systemctl daemon-reload
 
@@ -637,6 +695,8 @@ print_summary() {
  Config:       ${ENV_FILE}
  Service:      ${SERVICE_NAME}
  Agent API:    http://${host_ip}:${ZONEPLOY_AGENT_PORT}
+ Registry:     http://${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}
+ Cleanup:      enabled=${ZONEPLOY_CLEANUP_ENABLED}, keepReleases=${ZONEPLOY_CLEANUP_KEEP_RELEASES}, keepDays=${ZONEPLOY_CLEANUP_KEEP_DAYS}, maxRegistryGb=${ZONEPLOY_CLEANUP_MAX_REGISTRY_GB}
 
 Commands:
   zoneploy-agent-status
@@ -662,6 +722,7 @@ echo "  Repo:        ${ZONEPLOY_REPO_URL}"
 echo "  Ref:         ${ZONEPLOY_INSTALL_REF}"
 echo "  Profile:     ${ZONEPLOY_PROFILE}"
 echo "  Agent port:  ${ZONEPLOY_AGENT_PORT}"
+echo "  Registry:    ${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}"
 echo "  Package mgr: ${PACKAGE_MANAGER}"
 echo ""
 
@@ -679,6 +740,7 @@ build_source
 write_env_file
 write_command_shims
 write_systemd_service
+start_local_registry
 open_agent_port
 start_agent_service
 print_summary

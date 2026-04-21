@@ -6,6 +6,7 @@ export * from "./detect.js";
 export * from "./paths.js";
 export * from "./ports.js";
 export * from "./preflight.js";
+export * from "./registry.js";
 export * from "./routes.js";
 export * from "./status.js";
 

@@ -1,6 +1,7 @@
 import type {
   AgentMode,
   AgentStatus,
+  RegistryStatus,
   RuntimeCapability,
   RuntimeServiceSummary,
 } from "@zoneploy/types";
@@ -10,6 +11,7 @@ export type CreateAgentStatusInput = {
   mode: AgentMode;
   capabilities?: RuntimeCapability[];
   runtime?: RuntimeServiceSummary[];
+  registry?: RegistryStatus;
 };
 
 export const createAgentStatus = (input: CreateAgentStatusInput): AgentStatus => ({
@@ -20,4 +22,5 @@ export const createAgentStatus = (input: CreateAgentStatusInput): AgentStatus =>
   capabilities: input.capabilities ?? [],
   services: [],
   runtime: input.runtime ?? [],
+  ...(input.registry ? { registry: input.registry } : {}),
 });

@@ -76,6 +76,26 @@ zoneploy-agent uninstall
 zoneploy-agent uninstall --purge
 ```
 
+The installer also starts a local Docker registry on `127.0.0.1:5000` by
+default. Builds should push images there so the VPS owns its deploy artifacts
+and can keep rollback candidates without consuming Zoneploy Cloud storage.
+
+Registry and cleanup policy can be configured during install or update:
+
+```bash
+sudo env \
+  ZONEPLOY_REGISTRY_PORT=5000 \
+  ZONEPLOY_CLEANUP_ENABLED=true \
+  ZONEPLOY_CLEANUP_KEEP_RELEASES=5 \
+  ZONEPLOY_CLEANUP_KEEP_DAYS=14 \
+  ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=20 \
+  bash install.sh
+```
+
+These values are written to `/etc/zoneploy/config/agent.env` so a future local
+dashboard or Zoneploy Cloud pairing can expose the same policy without changing
+the runtime contract.
+
 ## License
 
 Apache-2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).

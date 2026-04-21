@@ -20,6 +20,8 @@ test("agent status command returns the public status contract", () => {
   assert.ok(Array.isArray(status.capabilities));
   assert.ok(Array.isArray(status.services));
   assert.ok(Array.isArray(status.runtime));
+  assert.equal(status.registry.url, "http://127.0.0.1:5000");
+  assert.equal(status.registry.cleanupPolicy.keepReleases, 5);
 });
 
 test("agent addons command returns built-in addon manifests", () => {
@@ -116,6 +118,8 @@ test("agent debug command returns diagnostic sections", () => {
   assert.equal(typeof debug.hostname, "string");
   assert.ok(Array.isArray(debug.runtime));
   assert.equal(typeof debug.routes, "object");
+  assert.equal(typeof debug.registry, "object");
+  assert.equal(debug.registry.cleanupPolicy.maxRegistryGb, 20);
 });
 
 test("agent audit command returns summarized checks", () => {

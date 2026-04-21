@@ -14,6 +14,10 @@ test("installer renders default filesystem paths", () => {
   assert.equal(paths.homeDir, "/opt/zoneploy");
   assert.equal(paths.sourceDir, "/opt/zoneploy/source");
   assert.equal(paths.envFile, "/etc/zoneploy/config/agent.env");
+  assert.equal(paths.registryDir, "/var/lib/zoneploy/registry");
+  assert.equal(paths.buildsDir, "/var/lib/zoneploy/builds");
+  assert.equal(paths.releasesDir, "/var/lib/zoneploy/releases");
+  assert.equal(paths.appsDir, "/var/lib/zoneploy/apps");
 });
 
 test("installer renders agent environment without leaking unset pairing values", () => {
@@ -25,7 +29,37 @@ test("installer renders agent environment without leaking unset pairing values",
 
   assert.match(env, /ZONEPLOY_PROFILE=standalone/);
   assert.match(env, /ZONEPLOY_AGENT_PORT=4000/);
+  assert.match(env, /ZONEPLOY_REGISTRY_HOST=127\.0\.0\.1/);
+  assert.match(env, /ZONEPLOY_REGISTRY_PORT=5000/);
+  assert.match(env, /ZONEPLOY_REGISTRY_DIR=\/var\/lib\/zoneploy\/registry/);
+  assert.match(env, /ZONEPLOY_CLEANUP_ENABLED=true/);
+  assert.match(env, /ZONEPLOY_CLEANUP_KEEP_RELEASES=5/);
+  assert.match(env, /ZONEPLOY_CLEANUP_KEEP_DAYS=14/);
+  assert.match(env, /ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=20/);
   assert.doesNotMatch(env, /ZONEPLOY_PAIRING_TOKEN/);
+});
+
+test("installer renders configurable registry and cleanup policy", () => {
+  const env = renderAgentEnvironment({
+    profile: "paired",
+    agentPort: 4100,
+    registryHost: "127.0.0.1",
+    registryPort: 5100,
+    cleanupPolicy: {
+      enabled: false,
+      keepReleases: 9,
+      keepDays: 30,
+      maxRegistryGb: 80,
+    },
+    paths: createDefaultInstallPaths(),
+  });
+
+  assert.match(env, /ZONEPLOY_AGENT_PORT=4100/);
+  assert.match(env, /ZONEPLOY_REGISTRY_PORT=5100/);
+  assert.match(env, /ZONEPLOY_CLEANUP_ENABLED=false/);
+  assert.match(env, /ZONEPLOY_CLEANUP_KEEP_RELEASES=9/);
+  assert.match(env, /ZONEPLOY_CLEANUP_KEEP_DAYS=30/);
+  assert.match(env, /ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=80/);
 });
 
 test("installer renders a systemd service for the persistent agent server", () => {

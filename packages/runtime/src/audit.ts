@@ -4,6 +4,7 @@ import {
   detectHostRuntime,
   getHostname,
 } from "./detect.js";
+import { collectLocalRegistryStatus } from "./registry.js";
 
 export type CollectAuditReportInput = {
   agentVersion: string;
@@ -48,6 +49,7 @@ export const collectAuditReport = async (
   const docker = services.find((service) => service.name === "docker");
   const dockerDaemon = services.find((service) => service.name === "docker-daemon");
   const traefik = services.find((service) => service.name === "traefik");
+  const registry = await collectLocalRegistryStatus();
   const sections: AuditSection[] = [
     {
       title: "Host",
@@ -122,6 +124,25 @@ export const collectAuditReport = async (
             ? "Traefik container is running."
             : "Traefik container is not running.",
           traefik?.details,
+        ),
+      ],
+    },
+    {
+      title: "Registry",
+      checks: [
+        check(
+          "registry.local",
+          registry.status === "running" ? "pass" : "warn",
+          "Local registry",
+          registry.status === "running"
+            ? "Local registry is running."
+            : "Local registry is not running.",
+          {
+            url: registry.url,
+            storagePath: registry.storagePath,
+            storageUsedMb: registry.storageUsedMb,
+            cleanupPolicy: registry.cleanupPolicy,
+          },
         ),
       ],
     },

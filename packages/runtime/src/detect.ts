@@ -8,6 +8,7 @@ import type {
 } from "@zoneploy/types";
 import { commandExists, runCommand } from "./commands.js";
 import { createRuntimePaths } from "./paths.js";
+import { collectLocalRegistryStatus } from "./registry.js";
 
 type OsRelease = {
   id: string | null;
@@ -197,6 +198,7 @@ export const collectRuntimeServices = async (): Promise<RuntimeServiceSummary[]>
     : undefined;
   const dockerRunning = dockerInstalled ? await isDockerRunning() : false;
   const traefik = await detectTraefikContainer();
+  const registry = await collectLocalRegistryStatus();
 
   return [
     {
@@ -213,6 +215,15 @@ export const collectRuntimeServices = async (): Promise<RuntimeServiceSummary[]>
       status: traefik.status,
       details: {
         dynamicFiles: traefik.dynamicFiles,
+      },
+    },
+    {
+      name: "local-registry",
+      status: registry.status,
+      details: {
+        url: registry.url,
+        storagePath: registry.storagePath,
+        storageUsedMb: registry.storageUsedMb,
       },
     },
   ];

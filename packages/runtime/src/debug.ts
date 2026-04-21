@@ -1,5 +1,6 @@
 import type { DebugReport } from "@zoneploy/types";
 import { detectHostRuntime, getHostname, collectRuntimeServices } from "./detect.js";
+import { collectLocalRegistryStatus } from "./registry.js";
 import { createRouteSnapshot } from "./routes.js";
 
 export type CollectDebugReportInput = {
@@ -14,6 +15,7 @@ export const collectDebugReport = async (
   hostname: getHostname(),
   host: await detectHostRuntime(),
   runtime: await collectRuntimeServices(),
+  registry: await collectLocalRegistryStatus(),
   routes: createRouteSnapshot(),
   addons: [],
   pairing: {

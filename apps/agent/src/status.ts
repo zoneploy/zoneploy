@@ -1,4 +1,9 @@
-import { collectRuntimeServices, createAgentStatus, loadAgentRuntimeConfig } from "@zoneploy/runtime";
+import {
+  collectLocalRegistryStatus,
+  collectRuntimeServices,
+  createAgentStatus,
+  loadAgentRuntimeConfig,
+} from "@zoneploy/runtime";
 import type { AgentStatus } from "@zoneploy/types";
 import { agentVersion } from "./version.js";
 
@@ -10,5 +15,6 @@ export const getAgentStatus = async (): Promise<AgentStatus> => {
     mode: config.profile,
     capabilities: [],
     runtime: await collectRuntimeServices(),
+    registry: await collectLocalRegistryStatus(),
   });
 };

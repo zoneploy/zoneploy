@@ -1,4 +1,4 @@
-import type { RuntimeServiceSummary } from "./agent.js";
+import type { RegistryStatus, RuntimeServiceSummary } from "./agent.js";
 import type { AddonManifest } from "./addons.js";
 import type { HostRuntimeInfo } from "./preflight.js";
 import type { PairingState } from "./pairing.js";
@@ -10,6 +10,7 @@ export type DebugReport = {
   hostname: string;
   host: HostRuntimeInfo;
   runtime: RuntimeServiceSummary[];
+  registry: RegistryStatus;
   routes: RouteSnapshot;
   addons: AddonManifest[];
   pairing: PairingState;

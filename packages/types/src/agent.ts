@@ -5,14 +5,40 @@ export type HealthState = "unknown" | "healthy" | "degraded" | "unhealthy";
 export type AgentRuntimeConfig = {
   profile: AgentMode;
   agentPort: number;
+  registryPort: number;
+  registryHost: string;
+  cleanupPolicy: CleanupPolicy;
   homeDir: string;
   sourceDir: string;
   configDir: string;
   dataDir: string;
   logsDir: string;
+  registryDir: string;
+  buildsDir: string;
+  releasesDir: string;
+  appsDir: string;
   cloudUrl?: string;
   instanceId?: string;
   pairingTokenSet: boolean;
+};
+
+export type CleanupPolicy = {
+  enabled: boolean;
+  keepReleases: number;
+  keepDays: number;
+  maxRegistryGb: number;
+};
+
+export type RegistryStatus = {
+  enabled: boolean;
+  host: string;
+  port: number;
+  url: string;
+  containerName: string;
+  status: RuntimeServiceStatus;
+  storagePath: string;
+  storageUsedMb: number | null;
+  cleanupPolicy: CleanupPolicy;
 };
 
 export type RuntimeCapability =
@@ -35,7 +61,7 @@ export type AgentServiceStatus = {
 export type RuntimeServiceStatus = "unknown" | "missing" | "installed" | "stopped" | "running";
 
 export type RuntimeServiceSummary = {
-  name: "docker" | "docker-daemon" | "traefik";
+  name: "docker" | "docker-daemon" | "traefik" | "local-registry";
   status: RuntimeServiceStatus;
   version?: string;
   details?: Record<string, unknown>;
@@ -49,4 +75,5 @@ export type AgentStatus = {
   capabilities: RuntimeCapability[];
   services: AgentServiceStatus[];
   runtime: RuntimeServiceSummary[];
+  registry?: RegistryStatus;
 };
