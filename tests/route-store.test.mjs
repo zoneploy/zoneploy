@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   createRouteSnapshot,
+  removeRoutesForDeployment,
   renderTraefikDynamicConfig,
   routeLocalDeployment,
   saveDeployment,
@@ -79,4 +80,35 @@ test("route store routes a running deployment through Traefik", async (t) => {
 
 test("route renderer emits an empty valid Traefik config", () => {
   assert.equal(renderTraefikDynamicConfig([]), "http:\n  routers: {}\n  services: {}\n");
+});
+
+test("route cleanup removes routes attached to a deployment", async (t) => {
+  const { traefikDynamicDir } = await withRouteDirs(t);
+  const now = new Date().toISOString();
+
+  await saveDeployment({
+    id: "demo-api",
+    appId: "demo-api",
+    name: "demo-api",
+    releaseId: "release-1",
+    image: "127.0.0.1:5000/zoneploy/demo-api:release-1",
+    containerName: "zoneploy-demo-api",
+    containerPort: 3000,
+    status: "running",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await routeLocalDeployment({
+    deploymentName: "demo-api",
+    host: "demo.example.com",
+  });
+
+  const removed = await removeRoutesForDeployment("demo-api", "zoneploy-demo-api");
+  const snapshot = await createRouteSnapshot();
+  const traefikConfig = await readFile(join(traefikDynamicDir, "zoneploy.yml"), "utf8");
+
+  assert.deepEqual(removed, ["demo.example.com"]);
+  assert.equal(snapshot.routes.length, 0);
+  assert.equal(traefikConfig, "http:\n  routers: {}\n  services: {}\n");
 });

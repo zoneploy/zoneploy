@@ -47,8 +47,13 @@ node apps/agent/dist/index.js cleanup --apply
 node apps/agent/dist/index.js releases
 node apps/agent/dist/index.js deploy --app demo --release <release-id> --port 3000
 node apps/agent/dist/index.js deployments
+node apps/agent/dist/index.js stop --deployment demo
+node apps/agent/dist/index.js start --deployment demo
+node apps/agent/dist/index.js restart --deployment demo
+node apps/agent/dist/index.js logs --deployment demo --tail 100
 node apps/agent/dist/index.js route --deployment demo --host demo.example.com
 node apps/agent/dist/index.js rollback --deployment demo --release <release-id>
+node apps/agent/dist/index.js remove --deployment demo
 node apps/agent/dist/index.js serve
 node apps/agent/dist/index.js update
 node apps/agent/dist/index.js repair
@@ -117,9 +122,14 @@ zoneploy-agent build --app demo-api --context /opt/demo-api
 zoneploy-agent releases demo-api
 zoneploy-agent deploy --app demo-api --release <release-id> --port 3000
 zoneploy-agent deployments
+zoneploy-agent stop --deployment demo-api
+zoneploy-agent start --deployment demo-api
+zoneploy-agent restart --deployment demo-api
+zoneploy-agent logs --deployment demo-api --tail 100
 zoneploy-agent route --deployment demo-api --host demo.example.com
 zoneploy-agent routes
 zoneploy-agent rollback --deployment demo-api --release <previous-release-id>
+zoneploy-agent remove --deployment demo-api
 zoneploy-agent cleanup
 zoneploy-agent cleanup --apply
 ```
@@ -140,6 +150,8 @@ the `zoneploy` Docker network and stores deployment metadata under
 
 Routes are stored under `/etc/zoneploy/runtime-routes` and rendered to Traefik's
 dynamic file provider at `/etc/zoneploy/traefik/dynamic/zoneploy.yml`.
+Removing a deployment also removes its attached routes and rewrites the Traefik
+dynamic config to avoid stale hosts.
 
 Cleanup defaults to dry-run. Use `--apply` to delete release metadata, local
 Docker images and local registry manifests according to the configured count and

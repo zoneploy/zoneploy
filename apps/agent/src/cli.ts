@@ -2,7 +2,13 @@ import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
 import { runLocalBuild } from "./builds.js";
 import { runLocalCleanup } from "./cleanup.js";
-import { getDeploymentSnapshot, runLocalDeploy } from "./deployments.js";
+import {
+  getDeploymentSnapshot,
+  getLocalDeploymentLogs,
+  runLocalDeploy,
+  runLocalDeploymentAction,
+  runLocalDeploymentRemove,
+} from "./deployments.js";
 import { getDebugReport } from "./debug.js";
 import { runAgentOperation } from "./operations.js";
 import { getPairingState } from "./pairing.js";
@@ -25,10 +31,15 @@ type AgentCommand =
   | "cleanup"
   | "deploy"
   | "deployments"
+  | "logs"
+  | "remove"
   | "route"
   | "rollback"
   | "releases"
   | "serve"
+  | "start"
+  | "stop"
+  | "restart"
   | "update"
   | "repair"
   | "uninstall";
@@ -45,10 +56,15 @@ const commands = new Set<AgentCommand>([
   "cleanup",
   "deploy",
   "deployments",
+  "logs",
+  "remove",
   "route",
   "rollback",
   "releases",
   "serve",
+  "start",
+  "stop",
+  "restart",
   "update",
   "repair",
   "uninstall",
@@ -97,6 +113,16 @@ const parsePort = (value: string | undefined, name: string): number => {
 
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65_535) {
     throw new Error(`${name} must be a valid TCP port.`);
+  }
+
+  return parsed;
+};
+
+const parsePositiveInt = (value: string | undefined, name: string): number => {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${name} must be a positive integer.`);
   }
 
   return parsed;
@@ -155,13 +181,36 @@ const parseRollbackOptions = (args: string[]) => {
   };
 };
 
+const parseDeploymentNameOptions = (
+  args: string[],
+  command: "logs" | "remove" | "restart" | "start" | "stop",
+) => {
+  const deploymentName = readOption(args, ["--deployment", "--name"]);
+
+  if (!deploymentName) {
+    throw new Error(`Usage: zoneploy-agent ${command} --deployment <name>`);
+  }
+
+  return { deploymentName };
+};
+
+const parseLogsOptions = (args: string[]) => {
+  const options = parseDeploymentNameOptions(args, "logs");
+  const tailValue = readOption(args, ["--tail"]);
+
+  return {
+    ...options,
+    tail: tailValue ? parsePositiveInt(tailValue, "tail") : undefined,
+  };
+};
+
 export const runCli = async (argv: string[]): Promise<number> => {
   const command = argv[2] ?? "status";
 
   if (!isAgentCommand(command)) {
     console.error(`Unknown command: ${command}`);
     console.error(
-      "Available commands: status, routes, addons, pairing, preflight, debug, audit, build, cleanup, deploy, deployments, route, rollback, releases, serve, update, repair, uninstall",
+      "Available commands: status, routes, addons, pairing, preflight, debug, audit, build, cleanup, deploy, deployments, logs, remove, route, rollback, releases, serve, start, stop, restart, update, repair, uninstall",
     );
     return 1;
   }
@@ -221,6 +270,39 @@ export const runCli = async (argv: string[]): Promise<number> => {
     case "deployments":
       printJson(await getDeploymentSnapshot());
       return 0;
+    case "logs":
+      try {
+        printJson(await getLocalDeploymentLogs(parseLogsOptions(argv.slice(3))));
+        return 0;
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : "Logs failed.");
+        return 1;
+      }
+    case "remove":
+      try {
+        const result = await runLocalDeploymentRemove(
+          parseDeploymentNameOptions(argv.slice(3), "remove"),
+        );
+        printJson(result);
+        return result.removed ? 0 : 1;
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : "Remove failed.");
+        return 1;
+      }
+    case "start":
+    case "stop":
+    case "restart":
+      try {
+        const result = await runLocalDeploymentAction(
+          command,
+          parseDeploymentNameOptions(argv.slice(3), command),
+        );
+        printJson(result);
+        return result.deployment.status === "failed" ? 1 : 0;
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : `${command} failed.`);
+        return 1;
+      }
     case "route":
       try {
         printJson(await runLocalRoute(parseRouteOptions(argv.slice(3))));

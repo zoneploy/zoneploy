@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type {
   LocalRouteRequest,
@@ -7,7 +7,6 @@ import type {
   RouteSnapshot,
 } from "@zoneploy/types";
 import { loadAgentRuntimeConfig } from "./config.js";
-import { readDeployment } from "./deployments.js";
 
 const routeFileName = "route.json";
 const traefikRoutesFileName = "zoneploy.yml";
@@ -36,6 +35,10 @@ const traefikRoutesPath = (): string => {
 
 const routePath = (host: string): string => {
   return join(routesRoot(), routeSlug(normalizeHost(host)), routeFileName);
+};
+
+const routeDirectoryPath = (host: string): string => {
+  return dirname(routePath(host));
 };
 
 const writeJsonFile = async (path: string, value: unknown): Promise<void> => {
@@ -128,9 +131,36 @@ export const writeTraefikDynamicConfig = async (): Promise<string> => {
   return path;
 };
 
+export const removeRoutesForDeployment = async (
+  deploymentName: string,
+  containerName: string,
+): Promise<string[]> => {
+  const routes = await listRoutes();
+  const removedHosts: string[] = [];
+
+  for (const route of routes) {
+    if (
+      route.target.serviceName !== deploymentName &&
+      route.target.containerName !== containerName
+    ) {
+      continue;
+    }
+
+    await rm(routeDirectoryPath(route.host), { recursive: true, force: true });
+    removedHosts.push(route.host);
+  }
+
+  if (removedHosts.length > 0) {
+    await writeTraefikDynamicConfig();
+  }
+
+  return removedHosts.sort();
+};
+
 export const routeLocalDeployment = async (
   request: LocalRouteRequest,
 ): Promise<LocalRouteResult> => {
+  const { readDeployment } = await import("./deployments.js");
   const deployment = await readDeployment(request.deploymentName);
 
   if (!deployment || deployment.status !== "running") {

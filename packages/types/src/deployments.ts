@@ -29,6 +29,36 @@ export type LocalDeployResult = {
   deployment: LocalDeployment;
 };
 
+export type DeploymentLifecycleAction = "start" | "stop" | "restart";
+
+export type LocalDeploymentActionRequest = {
+  deploymentName: string;
+};
+
+export type LocalDeploymentActionResult = {
+  deployment: LocalDeployment;
+};
+
+export type LocalDeploymentRemoveResult = {
+  deployment: LocalDeployment;
+  removed: boolean;
+  removedRoutes: string[];
+};
+
+export type LocalDeploymentLogsRequest = {
+  deploymentName: string;
+  tail?: number;
+};
+
+export type LocalDeploymentLogsResult = {
+  generatedAt: string;
+  deploymentName: string;
+  containerName: string;
+  tail: number;
+  stdout: string;
+  stderr: string;
+};
+
 export type DeploymentSnapshot = {
   generatedAt: string;
   deployments: LocalDeployment[];

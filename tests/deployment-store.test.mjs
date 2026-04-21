@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  createDeploymentSnapshot,
+  listDeployments,
   saveDeployment,
   updateDeploymentStatus,
 } from "../packages/runtime/dist/index.js";
@@ -48,9 +48,9 @@ test("deployment store saves and lists local deployments", async (t) => {
     containerId: "container-test",
   });
 
-  const snapshot = await createDeploymentSnapshot();
+  const deployments = await listDeployments();
 
-  assert.equal(snapshot.deployments.length, 1);
-  assert.equal(snapshot.deployments[0].status, "running");
-  assert.equal(snapshot.deployments[0].containerName, "zoneploy-demo-api");
+  assert.equal(deployments.length, 1);
+  assert.equal(deployments[0].status, "running");
+  assert.equal(deployments[0].containerName, "zoneploy-demo-api");
 });
