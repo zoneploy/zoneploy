@@ -46,6 +46,7 @@ test("installer renders agent environment without leaking unset pairing values",
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_DAYS=14/);
   assert.match(env, /ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=20/);
   assert.match(env, /ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS=30/);
+  assert.doesNotMatch(env, /ZONEPLOY_AGENT_API_TOKEN/);
   assert.doesNotMatch(env, /ZONEPLOY_PAIRING_TOKEN/);
 });
 
@@ -53,6 +54,7 @@ test("installer renders configurable registry and cleanup policy", () => {
   const env = renderAgentEnvironment({
     profile: "paired",
     agentPort: 4100,
+    agentApiToken: "agent-api-token-test",
     registryHost: "127.0.0.1",
     registryPort: 5100,
     cleanupPolicy: {
@@ -66,6 +68,7 @@ test("installer renders configurable registry and cleanup policy", () => {
   });
 
   assert.match(env, /ZONEPLOY_AGENT_PORT=4100/);
+  assert.match(env, /ZONEPLOY_AGENT_API_TOKEN=agent-api-token-test/);
   assert.match(env, /ZONEPLOY_REGISTRY_PORT=5100/);
   assert.match(env, /ZONEPLOY_CLEANUP_ENABLED=false/);
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_RELEASES=9/);

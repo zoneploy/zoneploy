@@ -166,3 +166,43 @@ test("agent serve command exposes the health endpoint", async (t) => {
   const body = await response.json();
   assert.equal(body.status, "ok");
 });
+
+test("agent serve command protects diagnostic endpoints with an API token", async (t) => {
+  const port = 47_000 + Math.floor(Math.random() * 1_000);
+  const token = "agent-api-token-test";
+  const child = spawn("node", ["apps/agent/dist/index.js", "serve"], {
+    env: {
+      ...process.env,
+      ZONEPLOY_AGENT_PORT: String(port),
+      ZONEPLOY_AGENT_API_TOKEN: token,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  t.after(() => {
+    child.kill("SIGTERM");
+  });
+
+  let response;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      response = await fetch(`http://127.0.0.1:${port}/status`);
+      break;
+    } catch {
+      await sleep(100);
+    }
+  }
+
+  assert.ok(response, "server did not start");
+  assert.equal(response.status, 401);
+
+  const authorized = await fetch(`http://127.0.0.1:${port}/status`, {
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(authorized.status, 200);
+  const body = await authorized.json();
+  assert.equal(body.agentVersion, "0.0.0");
+});

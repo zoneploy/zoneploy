@@ -62,6 +62,7 @@ export const loadAgentRuntimeConfig = (
   return {
     profile: readProfile(env.ZONEPLOY_PROFILE),
     agentPort: readNumber(env.ZONEPLOY_AGENT_PORT ?? env.AGENT_PORT, 4000),
+    agentApiToken: optionalValue(env.ZONEPLOY_AGENT_API_TOKEN),
     registryPort: readNumber(env.ZONEPLOY_REGISTRY_PORT, 5000),
     registryHost: optionalValue(env.ZONEPLOY_REGISTRY_HOST) ?? "127.0.0.1",
     cleanupPolicy: loadCleanupPolicy(env),

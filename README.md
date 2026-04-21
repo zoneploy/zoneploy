@@ -98,6 +98,17 @@ It also starts a local Traefik edge as `zoneploy-traefik` on HTTP port `80` by
 default. Use `--skip-traefik` or `ZONEPLOY_TRAEFIK_ENABLED=false` if another
 reverse proxy owns the public port.
 
+The agent HTTP API keeps `/health` public, but protects diagnostic endpoints
+with `ZONEPLOY_AGENT_API_TOKEN`. The installer generates this token and stores
+it in `/etc/zoneploy/config/agent.env` with `0600` permissions.
+
+```bash
+set -a
+. /etc/zoneploy/config/agent.env
+set +a
+curl -H "Authorization: Bearer ${ZONEPLOY_AGENT_API_TOKEN}" http://127.0.0.1:4000/status
+```
+
 Registry and cleanup policy can be configured during install or update:
 
 ```bash

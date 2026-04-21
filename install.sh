@@ -9,6 +9,7 @@ ZONEPLOY_CONFIG_DIR="${ZONEPLOY_CONFIG_DIR:-/etc/zoneploy/config}"
 ZONEPLOY_DATA_DIR="${ZONEPLOY_DATA_DIR:-/var/lib/zoneploy}"
 ZONEPLOY_LOG_DIR="${ZONEPLOY_LOG_DIR:-/var/log/zoneploy}"
 ZONEPLOY_AGENT_PORT="${ZONEPLOY_AGENT_PORT:-4000}"
+ZONEPLOY_AGENT_API_TOKEN="${ZONEPLOY_AGENT_API_TOKEN:-}"
 ZONEPLOY_ROUTES_DIR="${ZONEPLOY_ROUTES_DIR:-/etc/zoneploy/runtime-routes}"
 ZONEPLOY_REGISTRY_HOST="${ZONEPLOY_REGISTRY_HOST:-127.0.0.1}"
 ZONEPLOY_REGISTRY_PORT="${ZONEPLOY_REGISTRY_PORT:-5000}"
@@ -467,7 +468,31 @@ shell_quote() {
   printf "'%s'" "$value"
 }
 
+generate_secret() {
+  if command_exists openssl; then
+    openssl rand -hex 32
+    return
+  fi
+
+  if [ -r /dev/urandom ] && command_exists od; then
+    od -An -N32 -tx1 /dev/urandom | tr -d ' \n'
+    return
+  fi
+
+  fail "Could not generate a secure agent API token. Install openssl and retry."
+}
+
+ensure_agent_api_token() {
+  if [ -n "$ZONEPLOY_AGENT_API_TOKEN" ]; then
+    return
+  fi
+
+  ZONEPLOY_AGENT_API_TOKEN="$(generate_secret)"
+}
+
 write_env_file() {
+  ensure_agent_api_token
+
   install -d -m 0755 "$ZONEPLOY_CONFIG_DIR" "$ZONEPLOY_DATA_DIR" "$ZONEPLOY_LOG_DIR" \
     "$ZONEPLOY_ROUTES_DIR" "$ZONEPLOY_REGISTRY_DIR" "$ZONEPLOY_BUILDS_DIR" \
     "$ZONEPLOY_RELEASES_DIR" "$ZONEPLOY_DEPLOYMENTS_DIR" "$ZONEPLOY_APPS_DIR" \
@@ -477,6 +502,7 @@ write_env_file() {
 NODE_ENV=production
 ZONEPLOY_PROFILE=$(shell_quote "$ZONEPLOY_PROFILE")
 ZONEPLOY_AGENT_PORT=$(shell_quote "$ZONEPLOY_AGENT_PORT")
+ZONEPLOY_AGENT_API_TOKEN=$(shell_quote "$ZONEPLOY_AGENT_API_TOKEN")
 ZONEPLOY_REGISTRY_HOST=$(shell_quote "$ZONEPLOY_REGISTRY_HOST")
 ZONEPLOY_REGISTRY_PORT=$(shell_quote "$ZONEPLOY_REGISTRY_PORT")
 ZONEPLOY_HOME=$(shell_quote "$ZONEPLOY_HOME")

@@ -1,4 +1,5 @@
 import http from "node:http";
+import crypto from "node:crypto";
 import { ensureAgentPairing, loadAgentRuntimeConfig } from "@zoneploy/runtime";
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
@@ -38,6 +39,57 @@ const methodNotAllowed = (response: http.ServerResponse): void => {
       message: "Only GET is supported by the diagnostic API.",
     },
   });
+};
+
+const unauthorized = (response: http.ServerResponse): void => {
+  json(response, 401, {
+    error: {
+      code: "UNAUTHORIZED",
+      message: "A valid agent API token is required.",
+    },
+  });
+};
+
+const authNotConfigured = (response: http.ServerResponse): void => {
+  json(response, 503, {
+    error: {
+      code: "AGENT_API_AUTH_NOT_CONFIGURED",
+      message: "ZONEPLOY_AGENT_API_TOKEN is required for the agent HTTP API.",
+    },
+  });
+};
+
+const bearerToken = (request: http.IncomingMessage): string | null => {
+  const authorization = request.headers.authorization;
+
+  if (!authorization) {
+    return null;
+  }
+
+  const [scheme, token] = authorization.split(/\s+/, 2);
+
+  return scheme?.toLowerCase() === "bearer" && token ? token : null;
+};
+
+const agentToken = (request: http.IncomingMessage): string | null => {
+  const header = request.headers["x-zoneploy-agent-token"];
+
+  if (typeof header === "string" && header.trim().length > 0) {
+    return header;
+  }
+
+  return bearerToken(request);
+};
+
+const safeEquals = (left: string, right: string): boolean => {
+  const leftBytes = Buffer.from(left);
+  const rightBytes = Buffer.from(right);
+
+  if (leftBytes.length !== rightBytes.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(leftBytes, rightBytes);
 };
 
 const routeHandlers = new Map<string, JsonHandler>([
@@ -81,6 +133,20 @@ export const startAgentServer = async (): Promise<number> => {
 
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
       const handler = routeHandlers.get(url.pathname);
+
+      if (url.pathname !== "/health") {
+        if (!config.agentApiToken) {
+          authNotConfigured(response);
+          return;
+        }
+
+        const token = agentToken(request);
+
+        if (!token || !safeEquals(token, config.agentApiToken)) {
+          unauthorized(response);
+          return;
+        }
+      }
 
       if (!handler) {
         notFound(response);

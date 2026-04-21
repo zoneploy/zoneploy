@@ -5,6 +5,7 @@ export type HealthState = "unknown" | "healthy" | "degraded" | "unhealthy";
 export type AgentRuntimeConfig = {
   profile: AgentMode;
   agentPort: number;
+  agentApiToken?: string;
   registryPort: number;
   registryHost: string;
   cleanupPolicy: CleanupPolicy;

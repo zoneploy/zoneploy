@@ -28,6 +28,7 @@ export type CleanupPolicyOptions = {
 export type AgentEnvironmentOptions = {
   profile: InstallProfile;
   agentPort: number;
+  agentApiToken?: string;
   registryHost?: string;
   registryPort?: number;
   cleanupPolicy?: CleanupPolicyOptions;
@@ -101,6 +102,7 @@ export const renderAgentEnvironment = (options: AgentEnvironmentOptions): string
     envLine("NODE_ENV", "production"),
     envLine("ZONEPLOY_PROFILE", options.profile),
     envLine("ZONEPLOY_AGENT_PORT", options.agentPort),
+    envLine("ZONEPLOY_AGENT_API_TOKEN", options.agentApiToken),
     envLine("ZONEPLOY_REGISTRY_HOST", options.registryHost ?? "127.0.0.1"),
     envLine("ZONEPLOY_REGISTRY_PORT", options.registryPort ?? 5000),
     envLine("ZONEPLOY_HOME", options.paths.homeDir),
