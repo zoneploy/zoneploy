@@ -7,6 +7,7 @@ import type {
   RuntimeServiceSummary,
 } from "@zoneploy/types";
 import { commandExists, runCommand } from "./commands.js";
+import { loadAgentRuntimeConfig } from "./config.js";
 import { createRuntimePaths } from "./paths.js";
 import { collectLocalRegistryStatus } from "./registry.js";
 
@@ -242,6 +243,15 @@ export const detectTraefikContainer = async (): Promise<{
   status: "missing" | "stopped" | "running" | "unknown";
   dynamicFiles: string[];
 }> => {
+  const config = loadAgentRuntimeConfig();
+
+  if (!config.traefikEnabled) {
+    return {
+      status: "missing",
+      dynamicFiles: await listTraefikDynamicFiles(),
+    };
+  }
+
   if (!(await commandExists("docker"))) {
     return {
       status: "unknown",
@@ -251,7 +261,7 @@ export const detectTraefikContainer = async (): Promise<{
 
   const result = await runCommand(
     "docker",
-    ["inspect", "--format", "{{.State.Status}}", "traefik"],
+    ["inspect", "--format", "{{.State.Status}}", "zoneploy-traefik"],
     5_000,
   );
 
@@ -271,8 +281,10 @@ export const detectTraefikContainer = async (): Promise<{
 };
 
 export const listTraefikDynamicFiles = async (): Promise<string[]> => {
+  const config = loadAgentRuntimeConfig();
+
   try {
-    const entries = await readdir("/etc/traefik/dynamic", { withFileTypes: true });
+    const entries = await readdir(config.traefikDynamicDir, { withFileTypes: true });
 
     return entries
       .filter((entry) => entry.isFile())

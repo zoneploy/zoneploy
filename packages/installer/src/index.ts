@@ -6,11 +6,14 @@ export type AgentInstallPaths = {
   configDir: string;
   dataDir: string;
   logsDir: string;
+  routesDir: string;
   registryDir: string;
   buildsDir: string;
   releasesDir: string;
   deploymentsDir: string;
   appsDir: string;
+  traefikDir: string;
+  traefikDynamicDir: string;
   envFile: string;
 };
 
@@ -51,11 +54,14 @@ export const createDefaultInstallPaths = (homeDir = "/opt/zoneploy"): AgentInsta
     configDir,
     dataDir,
     logsDir: "/var/log/zoneploy",
+    routesDir: "/etc/zoneploy/runtime-routes",
     registryDir: `${dataDir}/registry`,
     buildsDir: `${dataDir}/builds`,
     releasesDir: `${dataDir}/releases`,
     deploymentsDir: `${dataDir}/deployments`,
     appsDir: `${dataDir}/apps`,
+    traefikDir: "/etc/zoneploy/traefik",
+    traefikDynamicDir: "/etc/zoneploy/traefik/dynamic",
     envFile: `${configDir}/agent.env`,
   };
 };
@@ -97,11 +103,16 @@ export const renderAgentEnvironment = (options: AgentEnvironmentOptions): string
     envLine("ZONEPLOY_CONFIG_DIR", options.paths.configDir),
     envLine("ZONEPLOY_DATA_DIR", options.paths.dataDir),
     envLine("ZONEPLOY_LOG_DIR", options.paths.logsDir),
+    envLine("ZONEPLOY_ROUTES_DIR", options.paths.routesDir),
     envLine("ZONEPLOY_REGISTRY_DIR", options.paths.registryDir),
     envLine("ZONEPLOY_BUILDS_DIR", options.paths.buildsDir),
     envLine("ZONEPLOY_RELEASES_DIR", options.paths.releasesDir),
     envLine("ZONEPLOY_DEPLOYMENTS_DIR", options.paths.deploymentsDir),
     envLine("ZONEPLOY_APPS_DIR", options.paths.appsDir),
+    envLine("ZONEPLOY_TRAEFIK_ENABLED", "true"),
+    envLine("ZONEPLOY_TRAEFIK_HTTP_PORT", 80),
+    envLine("ZONEPLOY_TRAEFIK_DIR", options.paths.traefikDir),
+    envLine("ZONEPLOY_TRAEFIK_DYNAMIC_DIR", options.paths.traefikDynamicDir),
     envLine("ZONEPLOY_CLEANUP_ENABLED", String(cleanupPolicy.enabled)),
     envLine("ZONEPLOY_CLEANUP_KEEP_RELEASES", cleanupPolicy.keepReleases),
     envLine("ZONEPLOY_CLEANUP_KEEP_DAYS", cleanupPolicy.keepDays),

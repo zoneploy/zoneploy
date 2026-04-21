@@ -16,7 +16,7 @@ export const collectDebugReport = async (
   host: await detectHostRuntime(),
   runtime: await collectRuntimeServices(),
   registry: await collectLocalRegistryStatus(),
-  routes: createRouteSnapshot(),
+  routes: await createRouteSnapshot(),
   addons: [],
   pairing: {
     paired: false,

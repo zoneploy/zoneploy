@@ -13,11 +13,16 @@ export type AgentRuntimeConfig = {
   configDir: string;
   dataDir: string;
   logsDir: string;
+  routesDir: string;
   registryDir: string;
   buildsDir: string;
   releasesDir: string;
   deploymentsDir: string;
   appsDir: string;
+  traefikEnabled: boolean;
+  traefikHttpPort: number;
+  traefikDir: string;
+  traefikDynamicDir: string;
   cloudUrl?: string;
   instanceId?: string;
   pairingTokenSet: boolean;

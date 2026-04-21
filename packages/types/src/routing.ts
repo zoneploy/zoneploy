@@ -19,3 +19,16 @@ export type RouteSnapshot = {
   generatedAt: string;
   routes: RouteDefinition[];
 };
+
+export type LocalRouteRequest = {
+  deploymentName: string;
+  host: string;
+  protocol?: RouteProtocol;
+  source?: RouteSource;
+};
+
+export type LocalRouteResult = {
+  route: RouteDefinition;
+  routeFile: string;
+  traefikFile: string;
+};

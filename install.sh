@@ -9,6 +9,7 @@ ZONEPLOY_CONFIG_DIR="${ZONEPLOY_CONFIG_DIR:-/etc/zoneploy/config}"
 ZONEPLOY_DATA_DIR="${ZONEPLOY_DATA_DIR:-/var/lib/zoneploy}"
 ZONEPLOY_LOG_DIR="${ZONEPLOY_LOG_DIR:-/var/log/zoneploy}"
 ZONEPLOY_AGENT_PORT="${ZONEPLOY_AGENT_PORT:-4000}"
+ZONEPLOY_ROUTES_DIR="${ZONEPLOY_ROUTES_DIR:-/etc/zoneploy/runtime-routes}"
 ZONEPLOY_REGISTRY_HOST="${ZONEPLOY_REGISTRY_HOST:-127.0.0.1}"
 ZONEPLOY_REGISTRY_PORT="${ZONEPLOY_REGISTRY_PORT:-5000}"
 ZONEPLOY_REGISTRY_DIR="${ZONEPLOY_REGISTRY_DIR:-${ZONEPLOY_DATA_DIR}/registry}"
@@ -20,6 +21,10 @@ ZONEPLOY_CLEANUP_ENABLED="${ZONEPLOY_CLEANUP_ENABLED:-true}"
 ZONEPLOY_CLEANUP_KEEP_RELEASES="${ZONEPLOY_CLEANUP_KEEP_RELEASES:-5}"
 ZONEPLOY_CLEANUP_KEEP_DAYS="${ZONEPLOY_CLEANUP_KEEP_DAYS:-14}"
 ZONEPLOY_CLEANUP_MAX_REGISTRY_GB="${ZONEPLOY_CLEANUP_MAX_REGISTRY_GB:-20}"
+ZONEPLOY_TRAEFIK_ENABLED="${ZONEPLOY_TRAEFIK_ENABLED:-true}"
+ZONEPLOY_TRAEFIK_HTTP_PORT="${ZONEPLOY_TRAEFIK_HTTP_PORT:-80}"
+ZONEPLOY_TRAEFIK_DIR="${ZONEPLOY_TRAEFIK_DIR:-/etc/zoneploy/traefik}"
+ZONEPLOY_TRAEFIK_DYNAMIC_DIR="${ZONEPLOY_TRAEFIK_DYNAMIC_DIR:-${ZONEPLOY_TRAEFIK_DIR}/dynamic}"
 ZONEPLOY_PROFILE="${ZONEPLOY_PROFILE:-standalone}"
 ZONEPLOY_CLOUD_URL="${ZONEPLOY_CLOUD_URL:-}"
 ZONEPLOY_PAIRING_TOKEN="${ZONEPLOY_PAIRING_TOKEN:-}"
@@ -63,12 +68,14 @@ Commands:
 Options:
   --agent-port <port>       Agent HTTP port. Default: 4000
   --registry-port <port>    Local registry port. Default: 5000
+  --http-port <port>        Local Traefik HTTP port. Default: 80
   --ref <git-ref>           Git ref to install. Default: development
   --repo <url>              Git repository URL. Default: https://github.com/zoneploy/zoneploy.git
   --paired                  Configure the agent as paired with Zoneploy Cloud
   --cloud-url <url>         Zoneploy Cloud API URL for paired mode
   --pairing-token <token>   One-time pairing token for paired mode
   --skip-docker             Do not install or start Docker
+  --skip-traefik            Do not start the local Traefik edge
   --purge                   With uninstall, also remove config, data and logs
   --help                    Show this help
 
@@ -97,6 +104,10 @@ while [ "$#" -gt 0 ]; do
       ZONEPLOY_REGISTRY_PORT="${2:?--registry-port requires a value}"
       shift 2
       ;;
+    --http-port)
+      ZONEPLOY_TRAEFIK_HTTP_PORT="${2:?--http-port requires a value}"
+      shift 2
+      ;;
     --repo)
       ZONEPLOY_REPO_URL="${2:?--repo requires a value}"
       shift 2
@@ -115,6 +126,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --skip-docker)
       ZONEPLOY_SKIP_DOCKER="true"
+      shift
+      ;;
+    --skip-traefik)
+      ZONEPLOY_TRAEFIK_ENABLED="false"
       shift
       ;;
     --purge)
@@ -238,6 +253,18 @@ require_supported_host() {
 
   if [ "$ZONEPLOY_REGISTRY_PORT" = "$ZONEPLOY_AGENT_PORT" ]; then
     fail "ZONEPLOY_REGISTRY_PORT must be different from ZONEPLOY_AGENT_PORT."
+  fi
+
+  case "$ZONEPLOY_TRAEFIK_HTTP_PORT" in
+    ''|*[!0-9]*) fail "ZONEPLOY_TRAEFIK_HTTP_PORT must be a TCP port number." ;;
+  esac
+
+  [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" -ge 1 ] && [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" -le 65535 ] \
+    || fail "ZONEPLOY_TRAEFIK_HTTP_PORT must be between 1 and 65535."
+
+  if [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" = "$ZONEPLOY_AGENT_PORT" ] \
+    || [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" = "$ZONEPLOY_REGISTRY_PORT" ]; then
+    fail "ZONEPLOY_TRAEFIK_HTTP_PORT must be different from agent and registry ports."
   fi
 
   if [ "$ZONEPLOY_PROFILE" = "paired" ] && [ -z "$ZONEPLOY_CLOUD_URL" ]; then
@@ -420,8 +447,9 @@ shell_quote() {
 
 write_env_file() {
   install -d -m 0755 "$ZONEPLOY_CONFIG_DIR" "$ZONEPLOY_DATA_DIR" "$ZONEPLOY_LOG_DIR" \
-    "$ZONEPLOY_REGISTRY_DIR" "$ZONEPLOY_BUILDS_DIR" "$ZONEPLOY_RELEASES_DIR" \
-    "$ZONEPLOY_DEPLOYMENTS_DIR" "$ZONEPLOY_APPS_DIR"
+    "$ZONEPLOY_ROUTES_DIR" "$ZONEPLOY_REGISTRY_DIR" "$ZONEPLOY_BUILDS_DIR" \
+    "$ZONEPLOY_RELEASES_DIR" "$ZONEPLOY_DEPLOYMENTS_DIR" "$ZONEPLOY_APPS_DIR" \
+    "$ZONEPLOY_TRAEFIK_DIR" "$ZONEPLOY_TRAEFIK_DYNAMIC_DIR"
   umask 077
   cat > "$ENV_FILE" <<ENV
 NODE_ENV=production
@@ -434,11 +462,16 @@ ZONEPLOY_SOURCE_DIR=$(shell_quote "$ZONEPLOY_SOURCE_DIR")
 ZONEPLOY_CONFIG_DIR=$(shell_quote "$ZONEPLOY_CONFIG_DIR")
 ZONEPLOY_DATA_DIR=$(shell_quote "$ZONEPLOY_DATA_DIR")
 ZONEPLOY_LOG_DIR=$(shell_quote "$ZONEPLOY_LOG_DIR")
+ZONEPLOY_ROUTES_DIR=$(shell_quote "$ZONEPLOY_ROUTES_DIR")
 ZONEPLOY_REGISTRY_DIR=$(shell_quote "$ZONEPLOY_REGISTRY_DIR")
 ZONEPLOY_BUILDS_DIR=$(shell_quote "$ZONEPLOY_BUILDS_DIR")
 ZONEPLOY_RELEASES_DIR=$(shell_quote "$ZONEPLOY_RELEASES_DIR")
 ZONEPLOY_DEPLOYMENTS_DIR=$(shell_quote "$ZONEPLOY_DEPLOYMENTS_DIR")
 ZONEPLOY_APPS_DIR=$(shell_quote "$ZONEPLOY_APPS_DIR")
+ZONEPLOY_TRAEFIK_ENABLED=$(shell_quote "$ZONEPLOY_TRAEFIK_ENABLED")
+ZONEPLOY_TRAEFIK_HTTP_PORT=$(shell_quote "$ZONEPLOY_TRAEFIK_HTTP_PORT")
+ZONEPLOY_TRAEFIK_DIR=$(shell_quote "$ZONEPLOY_TRAEFIK_DIR")
+ZONEPLOY_TRAEFIK_DYNAMIC_DIR=$(shell_quote "$ZONEPLOY_TRAEFIK_DYNAMIC_DIR")
 ZONEPLOY_CLEANUP_ENABLED=$(shell_quote "$ZONEPLOY_CLEANUP_ENABLED")
 ZONEPLOY_CLEANUP_KEEP_RELEASES=$(shell_quote "$ZONEPLOY_CLEANUP_KEEP_RELEASES")
 ZONEPLOY_CLEANUP_KEEP_DAYS=$(shell_quote "$ZONEPLOY_CLEANUP_KEEP_DAYS")
@@ -597,6 +630,33 @@ open_agent_port() {
   fi
 }
 
+open_traefik_port() {
+  if [ "$ZONEPLOY_TRAEFIK_ENABLED" != "true" ]; then
+    return
+  fi
+
+  local port="${ZONEPLOY_TRAEFIK_HTTP_PORT}/tcp"
+
+  if command_exists ufw && ufw status 2>/dev/null | grep -q "Status: active"; then
+    ufw allow "$port" >/dev/null 2>&1 || true
+    ok "Allowed ${port} through ufw"
+    return
+  fi
+
+  if command_exists firewall-cmd && systemctl is-active firewalld >/dev/null 2>&1; then
+    firewall-cmd --permanent --add-port="$port" >/dev/null 2>&1 || true
+    firewall-cmd --reload >/dev/null 2>&1 || true
+    ok "Allowed ${port} through firewalld"
+    return
+  fi
+
+  if command_exists iptables; then
+    iptables -C INPUT -p tcp --dport "$ZONEPLOY_TRAEFIK_HTTP_PORT" -j ACCEPT >/dev/null 2>&1 \
+      || iptables -I INPUT -p tcp --dport "$ZONEPLOY_TRAEFIK_HTTP_PORT" -j ACCEPT >/dev/null 2>&1 || true
+    ok "Allowed ${port} through iptables"
+  fi
+}
+
 start_local_registry() {
   if [ "$ZONEPLOY_SKIP_DOCKER" = "true" ]; then
     warn "Skipping local registry because Docker installation was skipped."
@@ -615,6 +675,55 @@ start_local_registry() {
     registry:2 >/dev/null
 
   ok "Local registry is running at http://${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}"
+}
+
+start_local_traefik() {
+  if [ "$ZONEPLOY_SKIP_DOCKER" = "true" ]; then
+    warn "Skipping local Traefik because Docker installation was skipped."
+    return
+  fi
+
+  if [ "$ZONEPLOY_TRAEFIK_ENABLED" != "true" ]; then
+    warn "Skipping local Traefik because it is disabled."
+    return
+  fi
+
+  install -d -m 0755 "$ZONEPLOY_TRAEFIK_DIR" "$ZONEPLOY_TRAEFIK_DYNAMIC_DIR"
+
+  cat > "${ZONEPLOY_TRAEFIK_DIR}/traefik.yml" <<TRAEFIK
+entryPoints:
+  web:
+    address: ":80"
+providers:
+  file:
+    directory: "/etc/zoneploy/traefik/dynamic"
+    watch: true
+log:
+  level: INFO
+TRAEFIK
+
+  if [ ! -f "${ZONEPLOY_TRAEFIK_DYNAMIC_DIR}/zoneploy.yml" ]; then
+    cat > "${ZONEPLOY_TRAEFIK_DYNAMIC_DIR}/zoneploy.yml" <<TRAEFIK_DYNAMIC
+http:
+  routers: {}
+  services: {}
+TRAEFIK_DYNAMIC
+  fi
+
+  docker rm -f zoneploy-traefik >/dev/null 2>&1 || true
+  if docker run -d \
+    --name zoneploy-traefik \
+    --restart unless-stopped \
+    --network zoneploy \
+    -p "${ZONEPLOY_TRAEFIK_HTTP_PORT}:80" \
+    -v "${ZONEPLOY_TRAEFIK_DIR}/traefik.yml:/etc/zoneploy/traefik/traefik.yml:ro" \
+    -v "${ZONEPLOY_TRAEFIK_DYNAMIC_DIR}:/etc/zoneploy/traefik/dynamic:ro" \
+    traefik:v3 \
+    --configFile=/etc/zoneploy/traefik/traefik.yml >/dev/null; then
+    ok "Local Traefik is running on HTTP port ${ZONEPLOY_TRAEFIK_HTTP_PORT}"
+  else
+    warn "Local Traefik could not start. Check if port ${ZONEPLOY_TRAEFIK_HTTP_PORT} is already in use."
+  fi
 }
 
 start_agent_service() {
@@ -653,6 +762,7 @@ uninstall_zoneploy() {
   systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
   systemctl disable "$SERVICE_NAME" >/dev/null 2>&1 || true
   docker rm -f zoneploy-registry >/dev/null 2>&1 || true
+  docker rm -f zoneploy-traefik >/dev/null 2>&1 || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
   systemctl daemon-reload
 
@@ -699,6 +809,7 @@ print_summary() {
  Service:      ${SERVICE_NAME}
  Agent API:    http://${host_ip}:${ZONEPLOY_AGENT_PORT}
  Registry:     http://${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}
+ Traefik:      enabled=${ZONEPLOY_TRAEFIK_ENABLED}, httpPort=${ZONEPLOY_TRAEFIK_HTTP_PORT}
  Cleanup:      enabled=${ZONEPLOY_CLEANUP_ENABLED}, keepReleases=${ZONEPLOY_CLEANUP_KEEP_RELEASES}, keepDays=${ZONEPLOY_CLEANUP_KEEP_DAYS}, maxRegistryGb=${ZONEPLOY_CLEANUP_MAX_REGISTRY_GB}
 
 Commands:
@@ -726,6 +837,7 @@ echo "  Ref:         ${ZONEPLOY_INSTALL_REF}"
 echo "  Profile:     ${ZONEPLOY_PROFILE}"
 echo "  Agent port:  ${ZONEPLOY_AGENT_PORT}"
 echo "  Registry:    ${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}"
+echo "  Traefik:     enabled=${ZONEPLOY_TRAEFIK_ENABLED}, httpPort=${ZONEPLOY_TRAEFIK_HTTP_PORT}"
 echo "  Package mgr: ${PACKAGE_MANAGER}"
 echo ""
 
@@ -744,6 +856,8 @@ write_env_file
 write_command_shims
 write_systemd_service
 start_local_registry
+start_local_traefik
 open_agent_port
+open_traefik_port
 start_agent_service
 print_summary

@@ -7,7 +7,7 @@ import { runAgentOperation } from "./operations.js";
 import { getPairingState } from "./pairing.js";
 import { getPreflightReport } from "./preflight.js";
 import { getReleaseSnapshot } from "./releases.js";
-import { getRouteSnapshot } from "./routes.js";
+import { getRouteSnapshot, runLocalRoute } from "./routes.js";
 import { startAgentServer } from "./server.js";
 import { getAgentStatus } from "./status.js";
 
@@ -22,6 +22,7 @@ type AgentCommand =
   | "build"
   | "deploy"
   | "deployments"
+  | "route"
   | "releases"
   | "serve"
   | "update"
@@ -39,6 +40,7 @@ const commands = new Set<AgentCommand>([
   "build",
   "deploy",
   "deployments",
+  "route",
   "releases",
   "serve",
   "update",
@@ -115,13 +117,29 @@ const parseDeployOptions = (args: string[]) => {
   };
 };
 
+const parseRouteOptions = (args: string[]) => {
+  const deploymentName = readOption(args, ["--deployment", "--name"]);
+  const host = readOption(args, ["--host"]);
+
+  if (!deploymentName || !host) {
+    throw new Error(
+      "Usage: zoneploy-agent route --deployment <name> --host <hostname>",
+    );
+  }
+
+  return {
+    deploymentName,
+    host,
+  };
+};
+
 export const runCli = async (argv: string[]): Promise<number> => {
   const command = argv[2] ?? "status";
 
   if (!isAgentCommand(command)) {
     console.error(`Unknown command: ${command}`);
     console.error(
-      "Available commands: status, routes, addons, pairing, preflight, debug, audit, build, deploy, deployments, releases, serve, update, repair, uninstall",
+      "Available commands: status, routes, addons, pairing, preflight, debug, audit, build, deploy, deployments, route, releases, serve, update, repair, uninstall",
     );
     return 1;
   }
@@ -131,7 +149,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
       printJson(await getAgentStatus());
       return 0;
     case "routes":
-      printJson(getRouteSnapshot());
+      printJson(await getRouteSnapshot());
       return 0;
     case "addons":
       printJson(listAvailableAddons());
@@ -169,6 +187,14 @@ export const runCli = async (argv: string[]): Promise<number> => {
     case "deployments":
       printJson(await getDeploymentSnapshot());
       return 0;
+    case "route":
+      try {
+        printJson(await runLocalRoute(parseRouteOptions(argv.slice(3))));
+        return 0;
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : "Route failed.");
+        return 1;
+      }
     case "releases":
       printJson(await getReleaseSnapshot(argv[3]));
       return 0;

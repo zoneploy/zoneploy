@@ -48,6 +48,7 @@ export const loadAgentRuntimeConfig = (
   const configDir = optionalValue(env.ZONEPLOY_CONFIG_DIR) ?? "/etc/zoneploy/config";
   const dataDir = optionalValue(env.ZONEPLOY_DATA_DIR) ?? "/var/lib/zoneploy";
   const logsDir = optionalValue(env.ZONEPLOY_LOG_DIR) ?? "/var/log/zoneploy";
+  const traefikDir = optionalValue(env.ZONEPLOY_TRAEFIK_DIR) ?? "/etc/zoneploy/traefik";
 
   return {
     profile: readProfile(env.ZONEPLOY_PROFILE),
@@ -60,11 +61,16 @@ export const loadAgentRuntimeConfig = (
     configDir,
     dataDir,
     logsDir,
+    routesDir: optionalValue(env.ZONEPLOY_ROUTES_DIR) ?? "/etc/zoneploy/runtime-routes",
     registryDir: optionalValue(env.ZONEPLOY_REGISTRY_DIR) ?? `${dataDir}/registry`,
     buildsDir: optionalValue(env.ZONEPLOY_BUILDS_DIR) ?? `${dataDir}/builds`,
     releasesDir: optionalValue(env.ZONEPLOY_RELEASES_DIR) ?? `${dataDir}/releases`,
     deploymentsDir: optionalValue(env.ZONEPLOY_DEPLOYMENTS_DIR) ?? `${dataDir}/deployments`,
     appsDir: optionalValue(env.ZONEPLOY_APPS_DIR) ?? `${dataDir}/apps`,
+    traefikEnabled: readBoolean(env.ZONEPLOY_TRAEFIK_ENABLED, true),
+    traefikHttpPort: readNumber(env.ZONEPLOY_TRAEFIK_HTTP_PORT, 80),
+    traefikDir,
+    traefikDynamicDir: optionalValue(env.ZONEPLOY_TRAEFIK_DYNAMIC_DIR) ?? `${traefikDir}/dynamic`,
     cloudUrl: optionalValue(env.ZONEPLOY_CLOUD_URL),
     instanceId: optionalValue(env.ZONEPLOY_INSTANCE_ID),
     pairingTokenSet: Boolean(optionalValue(env.ZONEPLOY_PAIRING_TOKEN)),

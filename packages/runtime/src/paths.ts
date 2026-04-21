@@ -5,6 +5,8 @@ export type RuntimePaths = {
   logsDir: string;
   routesDir: string;
   addonsDir: string;
+  traefikDir: string;
+  traefikDynamicDir: string;
   registryDir: string;
   buildsDir: string;
   releasesDir: string;
@@ -22,6 +24,8 @@ export const createRuntimePaths = (
   logsDir: "/var/log/zoneploy",
   routesDir: `${baseDir}/runtime-routes`,
   addonsDir: `${baseDir}/addons`,
+  traefikDir: `${baseDir}/traefik`,
+  traefikDynamicDir: `${baseDir}/traefik/dynamic`,
   registryDir: `${dataDir}/registry`,
   buildsDir: `${dataDir}/builds`,
   releasesDir: `${dataDir}/releases`,

@@ -46,6 +46,7 @@ node apps/agent/dist/index.js build --app demo --context /path/to/app
 node apps/agent/dist/index.js releases
 node apps/agent/dist/index.js deploy --app demo --release <release-id> --port 3000
 node apps/agent/dist/index.js deployments
+node apps/agent/dist/index.js route --deployment demo --host demo.example.com
 node apps/agent/dist/index.js serve
 node apps/agent/dist/index.js update
 node apps/agent/dist/index.js repair
@@ -83,12 +84,16 @@ zoneploy-agent uninstall --purge
 The installer also starts a local Docker registry on `127.0.0.1:5000` by
 default. Builds should push images there so the VPS owns its deploy artifacts
 and can keep rollback candidates without consuming Zoneploy Cloud storage.
+It also starts a local Traefik edge as `zoneploy-traefik` on HTTP port `80` by
+default. Use `--skip-traefik` or `ZONEPLOY_TRAEFIK_ENABLED=false` if another
+reverse proxy owns the public port.
 
 Registry and cleanup policy can be configured during install or update:
 
 ```bash
 sudo env \
   ZONEPLOY_REGISTRY_PORT=5000 \
+  ZONEPLOY_TRAEFIK_HTTP_PORT=80 \
   ZONEPLOY_CLEANUP_ENABLED=true \
   ZONEPLOY_CLEANUP_KEEP_RELEASES=5 \
   ZONEPLOY_CLEANUP_KEEP_DAYS=14 \
@@ -110,6 +115,8 @@ zoneploy-agent build --app demo-api --context /opt/demo-api
 zoneploy-agent releases demo-api
 zoneploy-agent deploy --app demo-api --release <release-id> --port 3000
 zoneploy-agent deployments
+zoneploy-agent route --deployment demo-api --host demo.example.com
+zoneploy-agent routes
 ```
 
 Images are tagged as:
@@ -125,6 +132,9 @@ Local deploys are intentionally driven from a ready release. The deploy command
 replaces the previous managed container for the same app, runs the new image on
 the `zoneploy` Docker network and stores deployment metadata under
 `/var/lib/zoneploy/deployments`.
+
+Routes are stored under `/etc/zoneploy/runtime-routes` and rendered to Traefik's
+dynamic file provider at `/etc/zoneploy/traefik/dynamic/zoneploy.yml`.
 
 ## License
 

@@ -14,11 +14,13 @@ test("installer renders default filesystem paths", () => {
   assert.equal(paths.homeDir, "/opt/zoneploy");
   assert.equal(paths.sourceDir, "/opt/zoneploy/source");
   assert.equal(paths.envFile, "/etc/zoneploy/config/agent.env");
+  assert.equal(paths.routesDir, "/etc/zoneploy/runtime-routes");
   assert.equal(paths.registryDir, "/var/lib/zoneploy/registry");
   assert.equal(paths.buildsDir, "/var/lib/zoneploy/builds");
   assert.equal(paths.releasesDir, "/var/lib/zoneploy/releases");
   assert.equal(paths.deploymentsDir, "/var/lib/zoneploy/deployments");
   assert.equal(paths.appsDir, "/var/lib/zoneploy/apps");
+  assert.equal(paths.traefikDynamicDir, "/etc/zoneploy/traefik/dynamic");
 });
 
 test("installer renders agent environment without leaking unset pairing values", () => {
@@ -32,8 +34,11 @@ test("installer renders agent environment without leaking unset pairing values",
   assert.match(env, /ZONEPLOY_AGENT_PORT=4000/);
   assert.match(env, /ZONEPLOY_REGISTRY_HOST=127\.0\.0\.1/);
   assert.match(env, /ZONEPLOY_REGISTRY_PORT=5000/);
+  assert.match(env, /ZONEPLOY_ROUTES_DIR=\/etc\/zoneploy\/runtime-routes/);
   assert.match(env, /ZONEPLOY_REGISTRY_DIR=\/var\/lib\/zoneploy\/registry/);
   assert.match(env, /ZONEPLOY_DEPLOYMENTS_DIR=\/var\/lib\/zoneploy\/deployments/);
+  assert.match(env, /ZONEPLOY_TRAEFIK_ENABLED=true/);
+  assert.match(env, /ZONEPLOY_TRAEFIK_HTTP_PORT=80/);
   assert.match(env, /ZONEPLOY_CLEANUP_ENABLED=true/);
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_RELEASES=5/);
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_DAYS=14/);
