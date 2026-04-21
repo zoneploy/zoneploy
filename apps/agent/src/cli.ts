@@ -1,9 +1,11 @@
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
+import { runLocalBuild } from "./builds.js";
 import { getDebugReport } from "./debug.js";
 import { runAgentOperation } from "./operations.js";
 import { getPairingState } from "./pairing.js";
 import { getPreflightReport } from "./preflight.js";
+import { getReleaseSnapshot } from "./releases.js";
 import { getRouteSnapshot } from "./routes.js";
 import { startAgentServer } from "./server.js";
 import { getAgentStatus } from "./status.js";
@@ -16,6 +18,8 @@ type AgentCommand =
   | "preflight"
   | "debug"
   | "audit"
+  | "build"
+  | "releases"
   | "serve"
   | "update"
   | "repair"
@@ -29,6 +33,8 @@ const commands = new Set<AgentCommand>([
   "preflight",
   "debug",
   "audit",
+  "build",
+  "releases",
   "serve",
   "update",
   "repair",
@@ -43,13 +49,43 @@ const printJson = (value: unknown): void => {
   console.log(JSON.stringify(value, null, 2));
 };
 
+const readOption = (args: string[], names: string[]): string | undefined => {
+  for (const name of names) {
+    const index = args.indexOf(name);
+
+    if (index >= 0) {
+      return args[index + 1];
+    }
+  }
+
+  return undefined;
+};
+
+const parseBuildOptions = (args: string[]) => {
+  const appId = readOption(args, ["--app", "--app-id"]);
+  const contextDir = readOption(args, ["--context", "--context-dir"]);
+
+  if (!appId || !contextDir) {
+    throw new Error(
+      "Usage: zoneploy-agent build --app <app-id> --context <path> [--dockerfile <path>] [--release <id>]",
+    );
+  }
+
+  return {
+    appId,
+    contextDir,
+    dockerfile: readOption(args, ["--dockerfile"]),
+    releaseId: readOption(args, ["--release", "--release-id"]),
+  };
+};
+
 export const runCli = async (argv: string[]): Promise<number> => {
   const command = argv[2] ?? "status";
 
   if (!isAgentCommand(command)) {
     console.error(`Unknown command: ${command}`);
     console.error(
-      "Available commands: status, routes, addons, pairing, preflight, debug, audit, serve, update, repair, uninstall",
+      "Available commands: status, routes, addons, pairing, preflight, debug, audit, build, releases, serve, update, repair, uninstall",
     );
     return 1;
   }
@@ -75,6 +111,18 @@ export const runCli = async (argv: string[]): Promise<number> => {
       return 0;
     case "audit":
       printJson(await getAuditReport());
+      return 0;
+    case "build":
+      try {
+        const result = await runLocalBuild(parseBuildOptions(argv.slice(3)));
+        printJson(result);
+        return result.release.status === "ready" ? 0 : 1;
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : "Build failed.");
+        return 1;
+      }
+    case "releases":
+      printJson(await getReleaseSnapshot(argv[3]));
       return 0;
     case "serve":
       return startAgentServer();

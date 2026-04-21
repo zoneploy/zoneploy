@@ -6,6 +6,12 @@ export type RuntimeCommandResult = {
   stderr: string;
 };
 
+export type RunCommandOptions = {
+  timeoutMs?: number;
+  cwd?: string;
+  maxBuffer?: number;
+};
+
 type ExecFileError = Error & {
   code?: number | string;
   stdout?: string | Buffer;
@@ -31,16 +37,22 @@ const exitCodeFromError = (error: ExecFileError): number => {
 export const runCommand = async (
   command: string,
   args: string[] = [],
-  timeoutMs = 10_000,
+  optionsOrTimeoutMs: RunCommandOptions | number = 10_000,
 ): Promise<RuntimeCommandResult> => {
+  const options =
+    typeof optionsOrTimeoutMs === "number"
+      ? { timeoutMs: optionsOrTimeoutMs }
+      : optionsOrTimeoutMs;
+
   return new Promise((resolve) => {
     execFile(
       command,
       args,
       {
-        timeout: timeoutMs,
+        timeout: options.timeoutMs ?? 10_000,
+        cwd: options.cwd,
         windowsHide: true,
-        maxBuffer: 1024 * 1024,
+        maxBuffer: options.maxBuffer ?? 1024 * 1024,
       },
       (error, stdout, stderr) => {
         if (error) {

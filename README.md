@@ -42,6 +42,8 @@ node apps/agent/dist/index.js pairing
 node apps/agent/dist/index.js preflight
 node apps/agent/dist/index.js debug
 node apps/agent/dist/index.js audit
+node apps/agent/dist/index.js build --app demo --context /path/to/app
+node apps/agent/dist/index.js releases
 node apps/agent/dist/index.js serve
 node apps/agent/dist/index.js update
 node apps/agent/dist/index.js repair
@@ -95,6 +97,25 @@ sudo env \
 These values are written to `/etc/zoneploy/config/agent.env` so a future local
 dashboard or Zoneploy Cloud pairing can expose the same policy without changing
 the runtime contract.
+
+## Local Build Releases
+
+The self-hosted runtime can build Docker images on the VPS, push them to the
+local registry and store release metadata under `/var/lib/zoneploy/releases`.
+
+```bash
+zoneploy-agent build --app demo-api --context /opt/demo-api
+zoneploy-agent releases demo-api
+```
+
+Images are tagged as:
+
+```txt
+127.0.0.1:5000/zoneploy/<app-id>:<release-id>
+```
+
+This keeps rollback candidates on the user's VPS instead of using Zoneploy
+Cloud storage or bandwidth.
 
 ## License
 

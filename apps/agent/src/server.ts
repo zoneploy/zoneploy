@@ -5,10 +5,11 @@ import { getAuditReport } from "./audit.js";
 import { getDebugReport } from "./debug.js";
 import { getPairingState } from "./pairing.js";
 import { getPreflightReport } from "./preflight.js";
+import { getReleaseSnapshot } from "./releases.js";
 import { getRouteSnapshot } from "./routes.js";
 import { getAgentStatus } from "./status.js";
 
-type JsonHandler = () => Promise<unknown> | unknown;
+type JsonHandler = (request: http.IncomingMessage) => Promise<unknown> | unknown;
 
 const json = (response: http.ServerResponse, statusCode: number, payload: unknown): void => {
   response.writeHead(statusCode, {
@@ -43,6 +44,13 @@ const routeHandlers = new Map<string, JsonHandler>([
   ["/audit", getAuditReport],
   ["/addons", listAvailableAddons],
   ["/routes", getRouteSnapshot],
+  [
+    "/releases",
+    (request) => {
+      const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+      return getReleaseSnapshot(url.searchParams.get("appId") ?? undefined);
+    },
+  ],
   ["/pairing", getPairingState],
 ]);
 
@@ -65,7 +73,7 @@ export const startAgentServer = async (): Promise<number> => {
       }
 
       try {
-        json(response, 200, await handler());
+        json(response, 200, await handler(request));
       } catch (error) {
         json(response, 500, {
           error: {
