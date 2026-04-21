@@ -1,5 +1,6 @@
 export * from "./audit.js";
 export * from "./commands.js";
+export * from "./config.js";
 export * from "./debug.js";
 export * from "./detect.js";
 export * from "./paths.js";

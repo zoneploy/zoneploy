@@ -42,6 +42,26 @@ node apps/agent/dist/index.js pairing
 node apps/agent/dist/index.js preflight
 node apps/agent/dist/index.js debug
 node apps/agent/dist/index.js audit
+node apps/agent/dist/index.js serve
+```
+
+## Self-Hosted Install
+
+The public installer is designed to be idempotent. It installs Node.js, pnpm and
+Docker, builds the local source, writes `/etc/zoneploy/config/agent.env`,
+registers `zoneploy-agent.service` and installs command shims under
+`/usr/local/bin`.
+
+```bash
+curl -sSL https://zoneploy.com/install.sh | bash
+```
+
+Development install from this repository:
+
+```bash
+sudo env ZONEPLOY_REPO_URL=https://github.com/zoneploy/zoneploy.git \
+  ZONEPLOY_INSTALL_REF=development \
+  bash install.sh
 ```
 
 ## License

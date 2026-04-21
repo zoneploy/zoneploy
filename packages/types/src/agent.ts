@@ -2,6 +2,19 @@ export type AgentMode = "standalone" | "paired";
 
 export type HealthState = "unknown" | "healthy" | "degraded" | "unhealthy";
 
+export type AgentRuntimeConfig = {
+  profile: AgentMode;
+  agentPort: number;
+  homeDir: string;
+  sourceDir: string;
+  configDir: string;
+  dataDir: string;
+  logsDir: string;
+  cloudUrl?: string;
+  instanceId?: string;
+  pairingTokenSet: boolean;
+};
+
 export type RuntimeCapability =
   | "linux-host"
   | "systemd"
