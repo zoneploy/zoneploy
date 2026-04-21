@@ -17,6 +17,30 @@ This repository will contain the installable single-VPS edition of Zoneploy: loc
 - Cloud billing, multi-tenant control plane and internal infrastructure do not belong here.
 - Shared contracts should stay clean enough to be reused by Zoneploy Cloud.
 
+## Current structure
+
+```txt
+apps/
+  agent/              Self-hosted agent CLI and future local API
+
+packages/
+  addons/             Add-on manifests and lifecycle contracts
+  installer/          Installer and systemd rendering utilities
+  runtime/            Runtime paths, status and routing primitives
+  types/              Public contracts shared across packages
+```
+
+## Agent commands
+
+The initial agent skeleton exposes JSON commands that will remain stable as the runtime is implemented:
+
+```bash
+node apps/agent/dist/index.js status
+node apps/agent/dist/index.js routes
+node apps/agent/dist/index.js addons
+node apps/agent/dist/index.js pairing
+```
+
 ## License
 
 Apache-2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
@@ -26,7 +50,7 @@ Apache-2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
 ```bash
 pnpm install
 pnpm typecheck
-pnpm test
 pnpm build
+pnpm test
 ```
 

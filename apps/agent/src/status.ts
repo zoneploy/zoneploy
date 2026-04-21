@@ -1,9 +1,11 @@
-﻿import type { AgentStatus } from "@zoneploy/types";
+import { createAgentStatus } from "@zoneploy/runtime";
+import type { AgentStatus } from "@zoneploy/types";
+import { agentVersion } from "./version.js";
 
-export const createStandaloneStatus = (): AgentStatus => ({
-  generatedAt: new Date().toISOString(),
-  agentVersion: "0.0.0",
-  mode: "standalone",
-  health: "unknown",
-  capabilities: [],
-});
+export const getAgentStatus = (): AgentStatus => {
+  return createAgentStatus({
+    agentVersion,
+    mode: "standalone",
+    capabilities: [],
+  });
+};

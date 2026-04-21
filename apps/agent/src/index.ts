@@ -1,5 +1,3 @@
-﻿import { createStandaloneStatus } from "./status";
+import { runCli } from "./cli.js";
 
-const status = createStandaloneStatus();
-
-console.log(JSON.stringify(status, null, 2));
+process.exitCode = runCli(process.argv);
