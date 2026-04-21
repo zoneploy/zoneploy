@@ -1,4 +1,4 @@
-﻿# Repository Boundaries
+# Repository Boundaries
 
 This repository is for the public Zoneploy self-hosted runtime.
 

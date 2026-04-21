@@ -1,4 +1,4 @@
-﻿# Zoneploy
+# Zoneploy
 
 Public self-hosted Zoneploy runtime.
 
