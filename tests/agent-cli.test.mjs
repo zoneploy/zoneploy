@@ -205,4 +205,14 @@ test("agent serve command protects diagnostic endpoints with an API token", asyn
   assert.equal(authorized.status, 200);
   const body = await authorized.json();
   assert.equal(body.agentVersion, "0.0.0");
+
+  const unknown = await fetch(`http://127.0.0.1:${port}/statuss`, {
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+  const unknownBody = await unknown.json();
+
+  assert.equal(unknown.status, 404);
+  assert.equal(unknownBody.error.code, "NOT_FOUND");
 });

@@ -134,6 +134,11 @@ export const startAgentServer = async (): Promise<number> => {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
       const handler = routeHandlers.get(url.pathname);
 
+      if (!handler) {
+        notFound(response);
+        return;
+      }
+
       if (url.pathname !== "/health") {
         if (!config.agentApiToken) {
           authNotConfigured(response);
@@ -146,11 +151,6 @@ export const startAgentServer = async (): Promise<number> => {
           unauthorized(response);
           return;
         }
-      }
-
-      if (!handler) {
-        notFound(response);
-        return;
       }
 
       try {
