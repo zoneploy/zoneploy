@@ -215,4 +215,42 @@ test("agent serve command protects diagnostic endpoints with an API token", asyn
 
   assert.equal(unknown.status, 404);
   assert.equal(unknownBody.error.code, "NOT_FOUND");
+
+  const methodNotAllowed = await fetch(`http://127.0.0.1:${port}/status`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: "{}",
+  });
+  const methodBody = await methodNotAllowed.json();
+
+  assert.equal(methodNotAllowed.status, 405);
+  assert.equal(methodBody.error.code, "METHOD_NOT_ALLOWED");
+
+  const unauthenticatedAction = await fetch(`http://127.0.0.1:${port}/actions/cleanup`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ apply: false }),
+  });
+  const unauthenticatedActionBody = await unauthenticatedAction.json();
+
+  assert.equal(unauthenticatedAction.status, 401);
+  assert.equal(unauthenticatedActionBody.error.code, "UNAUTHORIZED");
+
+  const cleanup = await fetch(`http://127.0.0.1:${port}/actions/cleanup`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ apply: false }),
+  });
+  const cleanupBody = await cleanup.json();
+
+  assert.equal(cleanup.status, 200);
+  assert.equal(cleanupBody.dryRun, true);
 });

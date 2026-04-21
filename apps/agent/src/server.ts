@@ -3,18 +3,32 @@ import crypto from "node:crypto";
 import { ensureAgentPairing, loadAgentRuntimeConfig } from "@zoneploy/runtime";
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
+import { runLocalBuild } from "./builds.js";
 import { startCloudCommandWorker } from "./cloud-worker.js";
 import { runLocalCleanup } from "./cleanup.js";
-import { getDeploymentSnapshot } from "./deployments.js";
+import {
+  getDeploymentSnapshot,
+  getLocalDeploymentLogs,
+  runLocalDeploy,
+  runLocalDeploymentAction,
+  runLocalDeploymentRemove,
+} from "./deployments.js";
 import { getDebugReport } from "./debug.js";
 import { getPairingState } from "./pairing.js";
 import { getPreflightReport } from "./preflight.js";
 import { getReleaseSnapshot } from "./releases.js";
+import { runLocalRollback } from "./rollback.js";
 import { getRouteSnapshot } from "./routes.js";
+import { runLocalRoute } from "./routes.js";
 import { getAgentStatus } from "./status.js";
 import { agentVersion } from "./version.js";
 
 type JsonHandler = (request: http.IncomingMessage) => Promise<unknown> | unknown;
+type JsonRoute = {
+  method: "GET" | "POST";
+  public?: boolean;
+  handler: JsonHandler;
+};
 
 const json = (response: http.ServerResponse, statusCode: number, payload: unknown): void => {
   response.writeHead(statusCode, {
@@ -36,7 +50,7 @@ const methodNotAllowed = (response: http.ServerResponse): void => {
   json(response, 405, {
     error: {
       code: "METHOD_NOT_ALLOWED",
-      message: "Only GET is supported by the diagnostic API.",
+      message: "HTTP method is not allowed for this route.",
     },
   });
 };
@@ -92,24 +106,123 @@ const safeEquals = (left: string, right: string): boolean => {
   return crypto.timingSafeEqual(leftBytes, rightBytes);
 };
 
-const routeHandlers = new Map<string, JsonHandler>([
-  ["/health", () => ({ status: "ok", timestamp: new Date().toISOString() })],
-  ["/status", getAgentStatus],
-  ["/preflight", getPreflightReport],
-  ["/debug", getDebugReport],
-  ["/audit", getAuditReport],
-  ["/cleanup", () => runLocalCleanup(true)],
-  ["/addons", listAvailableAddons],
-  ["/routes", getRouteSnapshot],
-  ["/deployments", getDeploymentSnapshot],
+const readJsonBody = async <T>(request: http.IncomingMessage): Promise<T> => {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  const raw = Buffer.concat(chunks).toString("utf8").trim();
+
+  if (!raw) {
+    return {} as T;
+  }
+
+  return JSON.parse(raw) as T;
+};
+
+const routeHandlers = new Map<string, JsonRoute>([
   [
-    "/releases",
-    (request) => {
-      const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-      return getReleaseSnapshot(url.searchParams.get("appId") ?? undefined);
+    "/health",
+    {
+      method: "GET",
+      public: true,
+      handler: () => ({ status: "ok", timestamp: new Date().toISOString() }),
     },
   ],
-  ["/pairing", getPairingState],
+  ["/status", { method: "GET", handler: getAgentStatus }],
+  ["/preflight", { method: "GET", handler: getPreflightReport }],
+  ["/debug", { method: "GET", handler: getDebugReport }],
+  ["/audit", { method: "GET", handler: getAuditReport }],
+  ["/cleanup", { method: "GET", handler: () => runLocalCleanup(true) }],
+  ["/addons", { method: "GET", handler: listAvailableAddons }],
+  ["/routes", { method: "GET", handler: getRouteSnapshot }],
+  ["/deployments", { method: "GET", handler: getDeploymentSnapshot }],
+  [
+    "/releases",
+    {
+      method: "GET",
+      handler: (request) => {
+        const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+        return getReleaseSnapshot(url.searchParams.get("appId") ?? undefined);
+      },
+    },
+  ],
+  ["/pairing", { method: "GET", handler: getPairingState }],
+  [
+    "/actions/build",
+    {
+      method: "POST",
+      handler: async (request) => runLocalBuild(await readJsonBody(request)),
+    },
+  ],
+  [
+    "/actions/deploy",
+    {
+      method: "POST",
+      handler: async (request) => runLocalDeploy(await readJsonBody(request)),
+    },
+  ],
+  [
+    "/actions/route",
+    {
+      method: "POST",
+      handler: async (request) => runLocalRoute(await readJsonBody(request)),
+    },
+  ],
+  [
+    "/actions/rollback",
+    {
+      method: "POST",
+      handler: async (request) => runLocalRollback(await readJsonBody(request)),
+    },
+  ],
+  [
+    "/actions/cleanup",
+    {
+      method: "POST",
+      handler: async (request) => {
+        const body = await readJsonBody<{ apply?: boolean }>(request);
+        return runLocalCleanup(body.apply !== true);
+      },
+    },
+  ],
+  [
+    "/actions/logs",
+    {
+      method: "POST",
+      handler: async (request) => getLocalDeploymentLogs(await readJsonBody(request)),
+    },
+  ],
+  [
+    "/actions/remove",
+    {
+      method: "POST",
+      handler: async (request) => runLocalDeploymentRemove(await readJsonBody(request)),
+    },
+  ],
+  [
+    "/actions/start",
+    {
+      method: "POST",
+      handler: async (request) => runLocalDeploymentAction("start", await readJsonBody(request)),
+    },
+  ],
+  [
+    "/actions/stop",
+    {
+      method: "POST",
+      handler: async (request) => runLocalDeploymentAction("stop", await readJsonBody(request)),
+    },
+  ],
+  [
+    "/actions/restart",
+    {
+      method: "POST",
+      handler: async (request) => runLocalDeploymentAction("restart", await readJsonBody(request)),
+    },
+  ],
 ]);
 
 export const startAgentServer = async (): Promise<number> => {
@@ -126,20 +239,20 @@ export const startAgentServer = async (): Promise<number> => {
 
   const server = http.createServer((request, response) => {
     void (async () => {
-      if (request.method !== "GET") {
-        methodNotAllowed(response);
-        return;
-      }
-
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-      const handler = routeHandlers.get(url.pathname);
+      const route = routeHandlers.get(url.pathname);
 
-      if (!handler) {
+      if (!route) {
         notFound(response);
         return;
       }
 
-      if (url.pathname !== "/health") {
+      if (request.method !== route.method) {
+        methodNotAllowed(response);
+        return;
+      }
+
+      if (route.public !== true) {
         if (!config.agentApiToken) {
           authNotConfigured(response);
           return;
@@ -154,7 +267,7 @@ export const startAgentServer = async (): Promise<number> => {
       }
 
       try {
-        json(response, 200, await handler(request));
+        json(response, 200, await route.handler(request));
       } catch (error) {
         json(response, 500, {
           error: {
