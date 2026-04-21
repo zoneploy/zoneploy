@@ -45,6 +45,7 @@ node apps/agent/dist/index.js preflight
 node apps/agent/dist/index.js debug
 node apps/agent/dist/index.js audit
 node apps/agent/dist/index.js build --app demo --context /path/to/app
+node apps/agent/dist/index.js cloud-sync
 node apps/agent/dist/index.js cleanup --apply
 node apps/agent/dist/index.js releases
 node apps/agent/dist/index.js deploy --app demo --release <release-id> --port 3000
@@ -137,6 +138,7 @@ zoneploy-agent cleanup --apply
 zoneploy-agent pairing
 zoneploy-agent pair --cloud-url https://api.zoneploy.com --token <one-time-token>
 zoneploy-agent unpair
+zoneploy-agent cloud-sync
 ```
 
 Images are tagged as:
@@ -162,6 +164,8 @@ Paired mode uses an outbound polling model. The agent exchanges a one-time
 pairing token for an agent token, stores it in `/etc/zoneploy/config/agent.env`
 with `0600` permissions, then polls Zoneploy Cloud for typed commands. This
 means Cloud control does not require exposing the agent HTTP port publicly.
+Use `zoneploy-agent cloud-sync` to force one polling cycle immediately when
+testing pairing or queued commands.
 
 Cleanup defaults to dry-run. Use `--apply` to delete release metadata, local
 Docker images and local registry manifests according to the configured count and

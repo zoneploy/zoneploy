@@ -25,6 +25,13 @@ type WorkerHandle = {
   stop: () => void;
 };
 
+export type CloudSyncResult = {
+  generatedAt: string;
+  paired: boolean;
+  commandCount: number;
+  commandIds: string[];
+};
+
 const sleep = async (ms: number): Promise<void> => {
   await new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -90,6 +97,31 @@ const runAndReportCommand = async (command: CloudCommand): Promise<void> => {
   await reportCloudCommandResult(result);
 };
 
+export const runCloudCommandPollOnce = async (): Promise<CloudSyncResult> => {
+  const config = loadAgentRuntimeConfig();
+
+  if (config.profile !== "paired" || !config.cloudUrl || !config.instanceId || !config.agentToken) {
+    throw new Error("Agent is not paired with Cloud.");
+  }
+
+  const response = await pollCloudCommands({
+    instanceId: config.instanceId,
+    heartbeat: await createHeartbeat(),
+  });
+  const commands = response.commands ?? [];
+
+  for (const command of commands) {
+    await runAndReportCommand(command);
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    paired: true,
+    commandCount: commands.length,
+    commandIds: commands.map((command) => command.id),
+  };
+};
+
 export const startCloudCommandWorker = (): WorkerHandle => {
   const config = loadAgentRuntimeConfig();
 
@@ -97,21 +129,13 @@ export const startCloudCommandWorker = (): WorkerHandle => {
     return { stop: () => undefined };
   }
 
-  const instanceId = config.instanceId;
   const pollIntervalMs = config.commandPollIntervalSeconds * 1000;
   let stopped = false;
 
   void (async () => {
     while (!stopped) {
       try {
-        const response = await pollCloudCommands({
-          instanceId,
-          heartbeat: await createHeartbeat(),
-        });
-
-        for (const command of response.commands ?? []) {
-          await runAndReportCommand(command);
-        }
+        await runCloudCommandPollOnce();
       } catch (error) {
         console.warn(
           `Zoneploy cloud polling failed: ${error instanceof Error ? error.message : "unknown error"}`,

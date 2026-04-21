@@ -1,6 +1,7 @@
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
 import { runLocalBuild } from "./builds.js";
+import { runCloudCommandPollOnce } from "./cloud-worker.js";
 import { runLocalCleanup } from "./cleanup.js";
 import {
   getDeploymentSnapshot,
@@ -30,6 +31,7 @@ type AgentCommand =
   | "debug"
   | "audit"
   | "build"
+  | "cloud-sync"
   | "cleanup"
   | "deploy"
   | "deployments"
@@ -57,6 +59,7 @@ const commands = new Set<AgentCommand>([
   "debug",
   "audit",
   "build",
+  "cloud-sync",
   "cleanup",
   "deploy",
   "deployments",
@@ -231,7 +234,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
   if (!isAgentCommand(command)) {
     console.error(`Unknown command: ${command}`);
     console.error(
-      "Available commands: status, routes, addons, pairing, pair, unpair, preflight, debug, audit, build, cleanup, deploy, deployments, logs, remove, route, rollback, releases, serve, start, stop, restart, update, repair, uninstall",
+      "Available commands: status, routes, addons, pairing, pair, unpair, preflight, debug, audit, build, cloud-sync, cleanup, deploy, deployments, logs, remove, route, rollback, releases, serve, start, stop, restart, update, repair, uninstall",
     );
     return 1;
   }
@@ -281,6 +284,14 @@ export const runCli = async (argv: string[]): Promise<number> => {
         return result.release.status === "ready" ? 0 : 1;
       } catch (error) {
         console.error(error instanceof Error ? error.message : "Build failed.");
+        return 1;
+      }
+    case "cloud-sync":
+      try {
+        printJson(await runCloudCommandPollOnce());
+        return 0;
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : "Cloud sync failed.");
         return 1;
       }
     case "cleanup":
