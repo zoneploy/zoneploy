@@ -8,6 +8,7 @@ export type AgentInstallPaths = {
   logsDir: string;
   routesDir: string;
   registryDir: string;
+  registryConfigFile: string;
   buildsDir: string;
   releasesDir: string;
   deploymentsDir: string;
@@ -56,6 +57,7 @@ export const createDefaultInstallPaths = (homeDir = "/opt/zoneploy"): AgentInsta
     logsDir: "/var/log/zoneploy",
     routesDir: "/etc/zoneploy/runtime-routes",
     registryDir: `${dataDir}/registry`,
+    registryConfigFile: `${configDir}/registry.yml`,
     buildsDir: `${dataDir}/builds`,
     releasesDir: `${dataDir}/releases`,
     deploymentsDir: `${dataDir}/deployments`,
@@ -105,6 +107,7 @@ export const renderAgentEnvironment = (options: AgentEnvironmentOptions): string
     envLine("ZONEPLOY_LOG_DIR", options.paths.logsDir),
     envLine("ZONEPLOY_ROUTES_DIR", options.paths.routesDir),
     envLine("ZONEPLOY_REGISTRY_DIR", options.paths.registryDir),
+    envLine("ZONEPLOY_REGISTRY_CONFIG_FILE", options.paths.registryConfigFile),
     envLine("ZONEPLOY_BUILDS_DIR", options.paths.buildsDir),
     envLine("ZONEPLOY_RELEASES_DIR", options.paths.releasesDir),
     envLine("ZONEPLOY_DEPLOYMENTS_DIR", options.paths.deploymentsDir),

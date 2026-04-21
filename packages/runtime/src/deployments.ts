@@ -40,6 +40,8 @@ const assertPort = (port: number, name: string): void => {
   }
 };
 
+export const normalizeLocalDeploymentName = normalizeDeploymentName;
+
 const deploymentsRoot = (): string => loadAgentRuntimeConfig().deploymentsDir;
 
 const deploymentPath = (name: string): string => {

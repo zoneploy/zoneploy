@@ -43,10 +43,12 @@ node apps/agent/dist/index.js preflight
 node apps/agent/dist/index.js debug
 node apps/agent/dist/index.js audit
 node apps/agent/dist/index.js build --app demo --context /path/to/app
+node apps/agent/dist/index.js cleanup --apply
 node apps/agent/dist/index.js releases
 node apps/agent/dist/index.js deploy --app demo --release <release-id> --port 3000
 node apps/agent/dist/index.js deployments
 node apps/agent/dist/index.js route --deployment demo --host demo.example.com
+node apps/agent/dist/index.js rollback --deployment demo --release <release-id>
 node apps/agent/dist/index.js serve
 node apps/agent/dist/index.js update
 node apps/agent/dist/index.js repair
@@ -117,6 +119,9 @@ zoneploy-agent deploy --app demo-api --release <release-id> --port 3000
 zoneploy-agent deployments
 zoneploy-agent route --deployment demo-api --host demo.example.com
 zoneploy-agent routes
+zoneploy-agent rollback --deployment demo-api --release <previous-release-id>
+zoneploy-agent cleanup
+zoneploy-agent cleanup --apply
 ```
 
 Images are tagged as:
@@ -135,6 +140,10 @@ the `zoneploy` Docker network and stores deployment metadata under
 
 Routes are stored under `/etc/zoneploy/runtime-routes` and rendered to Traefik's
 dynamic file provider at `/etc/zoneploy/traefik/dynamic/zoneploy.yml`.
+
+Cleanup defaults to dry-run. Use `--apply` to delete release metadata, local
+Docker images and local registry manifests according to the configured count and
+age retention policy. Active deployment releases are always protected.
 
 ## License
 

@@ -44,3 +44,33 @@ export type ReleaseSnapshot = {
   generatedAt: string;
   releases: DeploymentRelease[];
 };
+
+export type CleanupDeletedRelease = {
+  appId: string;
+  releaseId: string;
+  image: string;
+  reason: "count" | "age";
+};
+
+export type CleanupResult = {
+  generatedAt: string;
+  enabled: boolean;
+  dryRun: boolean;
+  policy: {
+    keepReleases: number;
+    keepDays: number;
+    maxRegistryGb: number;
+  };
+  keptActiveReleaseIds: string[];
+  deletedReleases: CleanupDeletedRelease[];
+  deletedImages: string[];
+  deletedRegistryManifests: string[];
+  prunedDockerObjects: boolean;
+  registryGarbageCollectAttempted: boolean;
+  registryGarbageCollectSucceeded: boolean;
+};
+
+export type RollbackRequest = {
+  deploymentName: string;
+  releaseId: string;
+};

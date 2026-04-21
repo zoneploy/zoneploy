@@ -15,6 +15,7 @@ export type AgentRuntimeConfig = {
   logsDir: string;
   routesDir: string;
   registryDir: string;
+  registryConfigFile: string;
   buildsDir: string;
   releasesDir: string;
   deploymentsDir: string;

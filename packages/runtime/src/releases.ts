@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import type { DeploymentRelease, ReleaseSnapshot, ReleaseStatus } from "@zoneploy/types";
@@ -69,6 +69,11 @@ const releasePath = (appId: string, releaseId: string): string => {
   return join(releasesRoot(), normalizeImageName(appId), releaseId, releaseFileName);
 };
 
+export const releaseDirectoryPath = (appId: string, releaseId: string): string => {
+  assertValidReleaseId(releaseId);
+  return join(releasesRoot(), normalizeImageName(appId), releaseId);
+};
+
 const latestPath = (appId: string): string => {
   return join(releasesRoot(), normalizeImageName(appId), "latest.json");
 };
@@ -113,6 +118,13 @@ export const readRelease = async (
   } catch {
     return null;
   }
+};
+
+export const deleteReleaseMetadata = async (
+  appId: string,
+  releaseId: string,
+): Promise<void> => {
+  await rm(releaseDirectoryPath(appId, releaseId), { recursive: true, force: true });
 };
 
 const readReleaseFile = async (path: string): Promise<DeploymentRelease | null> => {

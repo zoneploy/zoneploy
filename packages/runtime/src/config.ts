@@ -63,6 +63,8 @@ export const loadAgentRuntimeConfig = (
     logsDir,
     routesDir: optionalValue(env.ZONEPLOY_ROUTES_DIR) ?? "/etc/zoneploy/runtime-routes",
     registryDir: optionalValue(env.ZONEPLOY_REGISTRY_DIR) ?? `${dataDir}/registry`,
+    registryConfigFile:
+      optionalValue(env.ZONEPLOY_REGISTRY_CONFIG_FILE) ?? `${configDir}/registry.yml`,
     buildsDir: optionalValue(env.ZONEPLOY_BUILDS_DIR) ?? `${dataDir}/builds`,
     releasesDir: optionalValue(env.ZONEPLOY_RELEASES_DIR) ?? `${dataDir}/releases`,
     deploymentsDir: optionalValue(env.ZONEPLOY_DEPLOYMENTS_DIR) ?? `${dataDir}/deployments`,

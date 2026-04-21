@@ -2,6 +2,7 @@ import http from "node:http";
 import { loadAgentRuntimeConfig } from "@zoneploy/runtime";
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
+import { runLocalCleanup } from "./cleanup.js";
 import { getDeploymentSnapshot } from "./deployments.js";
 import { getDebugReport } from "./debug.js";
 import { getPairingState } from "./pairing.js";
@@ -43,6 +44,7 @@ const routeHandlers = new Map<string, JsonHandler>([
   ["/preflight", getPreflightReport],
   ["/debug", getDebugReport],
   ["/audit", getAuditReport],
+  ["/cleanup", () => runLocalCleanup(true)],
   ["/addons", listAvailableAddons],
   ["/routes", getRouteSnapshot],
   ["/deployments", getDeploymentSnapshot],

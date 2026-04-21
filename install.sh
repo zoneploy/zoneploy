@@ -13,6 +13,7 @@ ZONEPLOY_ROUTES_DIR="${ZONEPLOY_ROUTES_DIR:-/etc/zoneploy/runtime-routes}"
 ZONEPLOY_REGISTRY_HOST="${ZONEPLOY_REGISTRY_HOST:-127.0.0.1}"
 ZONEPLOY_REGISTRY_PORT="${ZONEPLOY_REGISTRY_PORT:-5000}"
 ZONEPLOY_REGISTRY_DIR="${ZONEPLOY_REGISTRY_DIR:-${ZONEPLOY_DATA_DIR}/registry}"
+ZONEPLOY_REGISTRY_CONFIG_FILE="${ZONEPLOY_REGISTRY_CONFIG_FILE:-${ZONEPLOY_CONFIG_DIR}/registry.yml}"
 ZONEPLOY_BUILDS_DIR="${ZONEPLOY_BUILDS_DIR:-${ZONEPLOY_DATA_DIR}/builds}"
 ZONEPLOY_RELEASES_DIR="${ZONEPLOY_RELEASES_DIR:-${ZONEPLOY_DATA_DIR}/releases}"
 ZONEPLOY_DEPLOYMENTS_DIR="${ZONEPLOY_DEPLOYMENTS_DIR:-${ZONEPLOY_DATA_DIR}/deployments}"
@@ -464,6 +465,7 @@ ZONEPLOY_DATA_DIR=$(shell_quote "$ZONEPLOY_DATA_DIR")
 ZONEPLOY_LOG_DIR=$(shell_quote "$ZONEPLOY_LOG_DIR")
 ZONEPLOY_ROUTES_DIR=$(shell_quote "$ZONEPLOY_ROUTES_DIR")
 ZONEPLOY_REGISTRY_DIR=$(shell_quote "$ZONEPLOY_REGISTRY_DIR")
+ZONEPLOY_REGISTRY_CONFIG_FILE=$(shell_quote "$ZONEPLOY_REGISTRY_CONFIG_FILE")
 ZONEPLOY_BUILDS_DIR=$(shell_quote "$ZONEPLOY_BUILDS_DIR")
 ZONEPLOY_RELEASES_DIR=$(shell_quote "$ZONEPLOY_RELEASES_DIR")
 ZONEPLOY_DEPLOYMENTS_DIR=$(shell_quote "$ZONEPLOY_DEPLOYMENTS_DIR")
@@ -663,7 +665,20 @@ start_local_registry() {
     return
   fi
 
-  install -d -m 0755 "$ZONEPLOY_REGISTRY_DIR"
+  install -d -m 0755 "$ZONEPLOY_REGISTRY_DIR" "$(dirname "$ZONEPLOY_REGISTRY_CONFIG_FILE")"
+  cat > "$ZONEPLOY_REGISTRY_CONFIG_FILE" <<REGISTRY_CONFIG
+version: 0.1
+log:
+  fields:
+    service: registry
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+  delete:
+    enabled: true
+http:
+  addr: :5000
+REGISTRY_CONFIG
 
   docker rm -f zoneploy-registry >/dev/null 2>&1 || true
   docker run -d \
@@ -671,6 +686,7 @@ start_local_registry() {
     --restart unless-stopped \
     --network zoneploy \
     -p "${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}:5000" \
+    -v "${ZONEPLOY_REGISTRY_CONFIG_FILE}:/etc/docker/registry/config.yml:ro" \
     -v "${ZONEPLOY_REGISTRY_DIR}:/var/lib/registry" \
     registry:2 >/dev/null
 

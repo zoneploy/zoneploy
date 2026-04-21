@@ -1,12 +1,14 @@
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
 import { runLocalBuild } from "./builds.js";
+import { runLocalCleanup } from "./cleanup.js";
 import { getDeploymentSnapshot, runLocalDeploy } from "./deployments.js";
 import { getDebugReport } from "./debug.js";
 import { runAgentOperation } from "./operations.js";
 import { getPairingState } from "./pairing.js";
 import { getPreflightReport } from "./preflight.js";
 import { getReleaseSnapshot } from "./releases.js";
+import { runLocalRollback } from "./rollback.js";
 import { getRouteSnapshot, runLocalRoute } from "./routes.js";
 import { startAgentServer } from "./server.js";
 import { getAgentStatus } from "./status.js";
@@ -20,9 +22,11 @@ type AgentCommand =
   | "debug"
   | "audit"
   | "build"
+  | "cleanup"
   | "deploy"
   | "deployments"
   | "route"
+  | "rollback"
   | "releases"
   | "serve"
   | "update"
@@ -38,9 +42,11 @@ const commands = new Set<AgentCommand>([
   "debug",
   "audit",
   "build",
+  "cleanup",
   "deploy",
   "deployments",
   "route",
+  "rollback",
   "releases",
   "serve",
   "update",
@@ -133,13 +139,29 @@ const parseRouteOptions = (args: string[]) => {
   };
 };
 
+const parseRollbackOptions = (args: string[]) => {
+  const deploymentName = readOption(args, ["--deployment", "--name"]);
+  const releaseId = readOption(args, ["--release", "--release-id"]);
+
+  if (!deploymentName || !releaseId) {
+    throw new Error(
+      "Usage: zoneploy-agent rollback --deployment <name> --release <release-id>",
+    );
+  }
+
+  return {
+    deploymentName,
+    releaseId,
+  };
+};
+
 export const runCli = async (argv: string[]): Promise<number> => {
   const command = argv[2] ?? "status";
 
   if (!isAgentCommand(command)) {
     console.error(`Unknown command: ${command}`);
     console.error(
-      "Available commands: status, routes, addons, pairing, preflight, debug, audit, build, deploy, deployments, route, releases, serve, update, repair, uninstall",
+      "Available commands: status, routes, addons, pairing, preflight, debug, audit, build, cleanup, deploy, deployments, route, rollback, releases, serve, update, repair, uninstall",
     );
     return 1;
   }
@@ -175,6 +197,9 @@ export const runCli = async (argv: string[]): Promise<number> => {
         console.error(error instanceof Error ? error.message : "Build failed.");
         return 1;
       }
+    case "cleanup":
+      printJson(await runLocalCleanup(!argv.slice(3).includes("--apply")));
+      return 0;
     case "deploy":
       try {
         const result = await runLocalDeploy(parseDeployOptions(argv.slice(3)));
@@ -182,6 +207,15 @@ export const runCli = async (argv: string[]): Promise<number> => {
         return result.deployment.status === "running" ? 0 : 1;
       } catch (error) {
         console.error(error instanceof Error ? error.message : "Deploy failed.");
+        return 1;
+      }
+    case "rollback":
+      try {
+        const result = await runLocalRollback(parseRollbackOptions(argv.slice(3)));
+        printJson(result);
+        return result.deployment.status === "running" ? 0 : 1;
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : "Rollback failed.");
         return 1;
       }
     case "deployments":
