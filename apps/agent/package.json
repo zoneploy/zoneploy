@@ -1,0 +1,21 @@
+﻿{
+  "name": "@zoneploy/agent",
+  "version": "0.0.0",
+  "type": "module",
+  "private": false,
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "zoneploy-agent": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@zoneploy/types": "workspace:*",
+    "@zoneploy/runtime": "workspace:*",
+    "@zoneploy/addons": "workspace:*"
+  }
+}

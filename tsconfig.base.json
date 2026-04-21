@@ -1,0 +1,23 @@
+﻿{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@zoneploy/types": ["packages/types/src/index.ts"],
+      "@zoneploy/runtime": ["packages/runtime/src/index.ts"],
+      "@zoneploy/addons": ["packages/addons/src/index.ts"],
+      "@zoneploy/installer": ["packages/installer/src/index.ts"]
+    }
+  }
+}
