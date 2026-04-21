@@ -43,6 +43,9 @@ node apps/agent/dist/index.js preflight
 node apps/agent/dist/index.js debug
 node apps/agent/dist/index.js audit
 node apps/agent/dist/index.js serve
+node apps/agent/dist/index.js update
+node apps/agent/dist/index.js repair
+node apps/agent/dist/index.js uninstall
 ```
 
 ## Self-Hosted Install
@@ -62,6 +65,15 @@ Development install from this repository:
 sudo env ZONEPLOY_REPO_URL=https://github.com/zoneploy/zoneploy.git \
   ZONEPLOY_INSTALL_REF=development \
   bash install.sh
+```
+
+Operational commands after install:
+
+```bash
+zoneploy-agent update
+zoneploy-agent repair
+zoneploy-agent uninstall
+zoneploy-agent uninstall --purge
 ```
 
 ## License

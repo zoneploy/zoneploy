@@ -108,3 +108,26 @@ set +a
 exec node "${sourceDir}/apps/agent/dist/index.js" "$@"
 `;
 };
+
+export type OperationCommand = "update" | "repair" | "uninstall";
+
+export const renderOperationShim = (
+  sourceDir: string,
+  envFile: string,
+  command: OperationCommand,
+): string => {
+  return `#!/usr/bin/env sh
+set -eu
+set -a
+[ -f "${envFile}" ] && . "${envFile}"
+set +a
+tmp="$(mktemp /tmp/zoneploy-install.XXXXXX)"
+cp "${sourceDir}/install.sh" "$tmp"
+set +e
+bash "$tmp" ${command} "$@"
+status="$?"
+set -e
+rm -f "$tmp"
+exit "$status"
+`;
+};

@@ -4,6 +4,7 @@ import {
   createDefaultInstallPaths,
   renderAgentEnvironment,
   renderCommandShim,
+  renderOperationShim,
   renderSystemdService,
 } from "../packages/installer/dist/index.js";
 
@@ -45,4 +46,18 @@ test("installer renders command shim that loads the agent environment", () => {
 
   assert.match(shim, /set -a/);
   assert.match(shim, /apps\/agent\/dist\/index\.js/);
+});
+
+test("installer renders operation shim through a temporary install script copy", () => {
+  const shim = renderOperationShim(
+    "/opt/zoneploy/source",
+    "/etc/zoneploy/config/agent.env",
+    "update",
+  );
+
+  assert.match(shim, /mktemp \/tmp\/zoneploy-install\.XXXXXX/);
+  assert.match(shim, /set \+e/);
+  assert.match(shim, /bash "\$tmp" update "\$@"/);
+  assert.match(shim, /set -e/);
+  assert.match(shim, /rm -f "\$tmp"/);
 });

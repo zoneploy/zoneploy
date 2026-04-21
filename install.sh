@@ -15,6 +15,8 @@ ZONEPLOY_PAIRING_TOKEN="${ZONEPLOY_PAIRING_TOKEN:-}"
 ZONEPLOY_INSTANCE_ID="${ZONEPLOY_INSTANCE_ID:-}"
 ZONEPLOY_SKIP_DOCKER="${ZONEPLOY_SKIP_DOCKER:-false}"
 
+ACTION="install"
+PURGE_DATA="false"
 SERVICE_NAME="zoneploy-agent"
 ENV_FILE="${ZONEPLOY_CONFIG_DIR}/agent.env"
 PNPM_VERSION="9.15.0"
@@ -36,7 +38,16 @@ Zoneploy self-hosted installer
 
 Usage:
   curl -sSL https://zoneploy.com/install.sh | bash
-  bash install.sh [options]
+  bash install.sh install [options]
+  bash install.sh update [options]
+  bash install.sh repair [options]
+  bash install.sh uninstall [--purge]
+
+Commands:
+  install                  Install or reinstall Zoneploy. Default command.
+  update                   Fetch the configured ref, rebuild and restart the agent.
+  repair                   Rebuild local source and rewrite service/shims without changing ref.
+  uninstall                Remove service, command shims and source. Keeps config/data by default.
 
 Options:
   --agent-port <port>       Agent HTTP port. Default: 4000
@@ -46,11 +57,19 @@ Options:
   --cloud-url <url>         Zoneploy Cloud API URL for paired mode
   --pairing-token <token>   One-time pairing token for paired mode
   --skip-docker             Do not install or start Docker
+  --purge                   With uninstall, also remove config, data and logs
   --help                    Show this help
 
 Environment variables with the ZONEPLOY_ prefix can also be used.
 USAGE
 }
+
+case "${1:-}" in
+  install|update|repair|uninstall)
+    ACTION="$1"
+    shift
+    ;;
+esac
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -80,6 +99,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --skip-docker)
       ZONEPLOY_SKIP_DOCKER="true"
+      shift
+      ;;
+    --purge)
+      PURGE_DATA="true"
       shift
       ;;
     --help)
@@ -169,6 +192,10 @@ require_supported_host() {
   [ -d /run/systemd/system ] || fail "systemd must be running as the host init system."
 
   PACKAGE_MANAGER="$(detect_package_manager)"
+  if [ "$ACTION" = "uninstall" ]; then
+    return
+  fi
+
   case "$PACKAGE_MANAGER" in
     apt|dnf|yum|apk) ;;
     *) fail "Unsupported package manager. Supported: apt, dnf, yum, apk." ;;
@@ -342,6 +369,15 @@ checkout_source() {
   fi
 }
 
+prepare_source() {
+  if [ "$ACTION" = "repair" ] && [ -d "${ZONEPLOY_SOURCE_DIR}/.git" ]; then
+    ok "Using existing Zoneploy source at ${ZONEPLOY_SOURCE_DIR}"
+    return
+  fi
+
+  checkout_source
+}
+
 build_source() {
   echo "Building Zoneploy..."
   cd "$ZONEPLOY_SOURCE_DIR"
@@ -384,6 +420,54 @@ set +a
 exec node "$ZONEPLOY_SOURCE_DIR/apps/agent/dist/index.js" "\$@"
 SHIM
 
+  cat > /usr/local/bin/zoneploy-agent-update <<SHIM
+#!/usr/bin/env sh
+set -eu
+set -a
+[ -f "$ENV_FILE" ] && . "$ENV_FILE"
+set +a
+tmp="\$(mktemp /tmp/zoneploy-install.XXXXXX)"
+cp "$ZONEPLOY_SOURCE_DIR/install.sh" "\$tmp"
+set +e
+bash "\$tmp" update "\$@"
+status="\$?"
+set -e
+rm -f "\$tmp"
+exit "\$status"
+SHIM
+
+  cat > /usr/local/bin/zoneploy-agent-repair <<SHIM
+#!/usr/bin/env sh
+set -eu
+set -a
+[ -f "$ENV_FILE" ] && . "$ENV_FILE"
+set +a
+tmp="\$(mktemp /tmp/zoneploy-install.XXXXXX)"
+cp "$ZONEPLOY_SOURCE_DIR/install.sh" "\$tmp"
+set +e
+bash "\$tmp" repair "\$@"
+status="\$?"
+set -e
+rm -f "\$tmp"
+exit "\$status"
+SHIM
+
+  cat > /usr/local/bin/zoneploy-agent-uninstall <<SHIM
+#!/usr/bin/env sh
+set -eu
+set -a
+[ -f "$ENV_FILE" ] && . "$ENV_FILE"
+set +a
+tmp="\$(mktemp /tmp/zoneploy-install.XXXXXX)"
+cp "$ZONEPLOY_SOURCE_DIR/install.sh" "\$tmp"
+set +e
+bash "\$tmp" uninstall "\$@"
+status="\$?"
+set -e
+rm -f "\$tmp"
+exit "\$status"
+SHIM
+
   cat > /usr/local/bin/zoneploy-agent-status <<'SHIM'
 #!/usr/bin/env sh
 exec zoneploy-agent status "$@"
@@ -408,7 +492,10 @@ SHIM
     /usr/local/bin/zoneploy-agent-status \
     /usr/local/bin/zoneploy-agent-debug \
     /usr/local/bin/zoneploy-agent-audit \
-    /usr/local/bin/zoneploy-agent-preflight
+    /usr/local/bin/zoneploy-agent-preflight \
+    /usr/local/bin/zoneploy-agent-update \
+    /usr/local/bin/zoneploy-agent-repair \
+    /usr/local/bin/zoneploy-agent-uninstall
   ok "Installed command shims"
 }
 
@@ -483,6 +570,52 @@ start_agent_service() {
   fail "${SERVICE_NAME} did not become active."
 }
 
+safe_rm_rf() {
+  local target="${1:-}"
+
+  case "$target" in
+    ""|"/"|"/etc"|"/var"|"/opt"|"/usr"|"/usr/local"|"/usr/local/bin")
+      fail "Refusing to remove unsafe path: ${target}"
+      ;;
+  esac
+
+  rm -rf "$target"
+}
+
+uninstall_zoneploy() {
+  echo "Uninstalling Zoneploy..."
+  systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
+  systemctl disable "$SERVICE_NAME" >/dev/null 2>&1 || true
+  rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+  systemctl daemon-reload
+
+  rm -f /usr/local/bin/zoneploy-agent \
+    /usr/local/bin/zoneploy-agent-status \
+    /usr/local/bin/zoneploy-agent-preflight \
+    /usr/local/bin/zoneploy-agent-debug \
+    /usr/local/bin/zoneploy-agent-audit \
+    /usr/local/bin/zoneploy-agent-update \
+    /usr/local/bin/zoneploy-agent-repair \
+    /usr/local/bin/zoneploy-agent-uninstall
+
+  safe_rm_rf "$ZONEPLOY_SOURCE_DIR"
+  rmdir "$ZONEPLOY_HOME" >/dev/null 2>&1 || true
+
+  if [ "$PURGE_DATA" = "true" ]; then
+    safe_rm_rf "$ZONEPLOY_CONFIG_DIR"
+    safe_rm_rf "$ZONEPLOY_DATA_DIR"
+    safe_rm_rf "$ZONEPLOY_LOG_DIR"
+    rmdir "$(dirname "$ZONEPLOY_CONFIG_DIR")" >/dev/null 2>&1 || true
+  fi
+
+  ok "Zoneploy service and command shims removed"
+  if [ "$PURGE_DATA" = "true" ]; then
+    ok "Zoneploy config, data and logs removed"
+  else
+    warn "Config and data were kept. Run uninstall --purge to remove them."
+  fi
+}
+
 print_summary() {
   local host_ip
   host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
@@ -504,6 +637,9 @@ Commands:
   zoneploy-agent-preflight
   zoneploy-agent-debug
   zoneploy-agent-audit
+  zoneploy-agent-update
+  zoneploy-agent-repair
+  zoneploy-agent-uninstall
   journalctl -u ${SERVICE_NAME} -f
 
 SUMMARY
@@ -515,6 +651,7 @@ echo ""
 echo "========================================"
 echo " Zoneploy self-hosted installer"
 echo "========================================"
+echo "  Action:      ${ACTION}"
 echo "  Repo:        ${ZONEPLOY_REPO_URL}"
 echo "  Ref:         ${ZONEPLOY_INSTALL_REF}"
 echo "  Profile:     ${ZONEPLOY_PROFILE}"
@@ -522,11 +659,16 @@ echo "  Agent port:  ${ZONEPLOY_AGENT_PORT}"
 echo "  Package mgr: ${PACKAGE_MANAGER}"
 echo ""
 
+if [ "$ACTION" = "uninstall" ]; then
+  uninstall_zoneploy
+  exit 0
+fi
+
 install_base_packages
 install_nodejs
 install_pnpm
 install_docker
-checkout_source
+prepare_source
 build_source
 write_env_file
 write_command_shims

@@ -1,6 +1,7 @@
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
 import { getDebugReport } from "./debug.js";
+import { runAgentOperation } from "./operations.js";
 import { getPairingState } from "./pairing.js";
 import { getPreflightReport } from "./preflight.js";
 import { getRouteSnapshot } from "./routes.js";
@@ -15,7 +16,10 @@ type AgentCommand =
   | "preflight"
   | "debug"
   | "audit"
-  | "serve";
+  | "serve"
+  | "update"
+  | "repair"
+  | "uninstall";
 
 const commands = new Set<AgentCommand>([
   "status",
@@ -26,6 +30,9 @@ const commands = new Set<AgentCommand>([
   "debug",
   "audit",
   "serve",
+  "update",
+  "repair",
+  "uninstall",
 ]);
 
 const isAgentCommand = (value: string): value is AgentCommand => {
@@ -41,7 +48,9 @@ export const runCli = async (argv: string[]): Promise<number> => {
 
   if (!isAgentCommand(command)) {
     console.error(`Unknown command: ${command}`);
-    console.error("Available commands: status, routes, addons, pairing, preflight, debug, audit, serve");
+    console.error(
+      "Available commands: status, routes, addons, pairing, preflight, debug, audit, serve, update, repair, uninstall",
+    );
     return 1;
   }
 
@@ -69,5 +78,11 @@ export const runCli = async (argv: string[]): Promise<number> => {
       return 0;
     case "serve":
       return startAgentServer();
+    case "update":
+      return runAgentOperation("update", argv.slice(3));
+    case "repair":
+      return runAgentOperation("repair", argv.slice(3));
+    case "uninstall":
+      return runAgentOperation("uninstall", argv.slice(3));
   }
 };
