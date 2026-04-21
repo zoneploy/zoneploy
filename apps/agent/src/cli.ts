@@ -11,7 +11,7 @@ import {
 } from "./deployments.js";
 import { getDebugReport } from "./debug.js";
 import { runAgentOperation } from "./operations.js";
-import { getPairingState } from "./pairing.js";
+import { getPairingState, runPairing, runUnpairing } from "./pairing.js";
 import { getPreflightReport } from "./preflight.js";
 import { getReleaseSnapshot } from "./releases.js";
 import { runLocalRollback } from "./rollback.js";
@@ -24,6 +24,8 @@ type AgentCommand =
   | "routes"
   | "addons"
   | "pairing"
+  | "pair"
+  | "unpair"
   | "preflight"
   | "debug"
   | "audit"
@@ -49,6 +51,8 @@ const commands = new Set<AgentCommand>([
   "routes",
   "addons",
   "pairing",
+  "pair",
+  "unpair",
   "preflight",
   "debug",
   "audit",
@@ -105,6 +109,23 @@ const parseBuildOptions = (args: string[]) => {
     contextDir,
     dockerfile: readOption(args, ["--dockerfile"]),
     releaseId: readOption(args, ["--release", "--release-id"]),
+  };
+};
+
+const parsePairOptions = (args: string[]) => {
+  const cloudUrl = readOption(args, ["--cloud-url"]);
+  const pairingToken = readOption(args, ["--token", "--pairing-token"]);
+
+  if (!cloudUrl || !pairingToken) {
+    throw new Error(
+      "Usage: zoneploy-agent pair --cloud-url <url> --token <one-time-token> [--name <instance-name>]",
+    );
+  }
+
+  return {
+    cloudUrl,
+    pairingToken,
+    instanceName: readOption(args, ["--name", "--instance-name"]),
   };
 };
 
@@ -210,7 +231,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
   if (!isAgentCommand(command)) {
     console.error(`Unknown command: ${command}`);
     console.error(
-      "Available commands: status, routes, addons, pairing, preflight, debug, audit, build, cleanup, deploy, deployments, logs, remove, route, rollback, releases, serve, start, stop, restart, update, repair, uninstall",
+      "Available commands: status, routes, addons, pairing, pair, unpair, preflight, debug, audit, build, cleanup, deploy, deployments, logs, remove, route, rollback, releases, serve, start, stop, restart, update, repair, uninstall",
     );
     return 1;
   }
@@ -228,6 +249,22 @@ export const runCli = async (argv: string[]): Promise<number> => {
     case "pairing":
       printJson(getPairingState());
       return 0;
+    case "pair":
+      try {
+        printJson(await runPairing(parsePairOptions(argv.slice(3))));
+        return 0;
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : "Pairing failed.");
+        return 1;
+      }
+    case "unpair":
+      try {
+        printJson(await runUnpairing());
+        return 0;
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : "Unpair failed.");
+        return 1;
+      }
     case "preflight":
       printJson(await getPreflightReport());
       return 0;

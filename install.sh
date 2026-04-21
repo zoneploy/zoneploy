@@ -30,6 +30,9 @@ ZONEPLOY_PROFILE="${ZONEPLOY_PROFILE:-standalone}"
 ZONEPLOY_CLOUD_URL="${ZONEPLOY_CLOUD_URL:-}"
 ZONEPLOY_PAIRING_TOKEN="${ZONEPLOY_PAIRING_TOKEN:-}"
 ZONEPLOY_INSTANCE_ID="${ZONEPLOY_INSTANCE_ID:-}"
+ZONEPLOY_AGENT_TOKEN="${ZONEPLOY_AGENT_TOKEN:-}"
+ZONEPLOY_PAIRED_AT="${ZONEPLOY_PAIRED_AT:-}"
+ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS="${ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS:-30}"
 ZONEPLOY_SKIP_DOCKER="${ZONEPLOY_SKIP_DOCKER:-false}"
 
 ACTION="install"
@@ -75,6 +78,7 @@ Options:
   --paired                  Configure the agent as paired with Zoneploy Cloud
   --cloud-url <url>         Zoneploy Cloud API URL for paired mode
   --pairing-token <token>   One-time pairing token for paired mode
+  --poll-interval <seconds> Cloud command polling interval. Default: 30
   --skip-docker             Do not install or start Docker
   --skip-traefik            Do not start the local Traefik edge
   --purge                   With uninstall, also remove config, data and logs
@@ -123,6 +127,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --pairing-token)
       ZONEPLOY_PAIRING_TOKEN="${2:?--pairing-token requires a value}"
+      shift 2
+      ;;
+    --poll-interval)
+      ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS="${2:?--poll-interval requires a value}"
       shift 2
       ;;
     --skip-docker)
@@ -271,6 +279,19 @@ require_supported_host() {
   if [ "$ZONEPLOY_PROFILE" = "paired" ] && [ -z "$ZONEPLOY_CLOUD_URL" ]; then
     fail "Paired mode requires --cloud-url or ZONEPLOY_CLOUD_URL."
   fi
+
+  if [ "$ZONEPLOY_PROFILE" = "paired" ] \
+    && [ -z "$ZONEPLOY_PAIRING_TOKEN" ] \
+    && [ -z "$ZONEPLOY_AGENT_TOKEN" ]; then
+    fail "Paired mode requires --pairing-token or an existing ZONEPLOY_AGENT_TOKEN."
+  fi
+
+  case "$ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS" in
+    ''|*[!0-9]*) fail "ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS must be a number." ;;
+  esac
+
+  [ "$ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS" -ge 5 ] && [ "$ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS" -le 3600 ] \
+    || fail "ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS must be between 5 and 3600."
 }
 
 install_base_packages() {
@@ -481,6 +502,9 @@ ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=$(shell_quote "$ZONEPLOY_CLEANUP_MAX_REGISTRY_G
 ZONEPLOY_CLOUD_URL=$(shell_quote "$ZONEPLOY_CLOUD_URL")
 ZONEPLOY_PAIRING_TOKEN=$(shell_quote "$ZONEPLOY_PAIRING_TOKEN")
 ZONEPLOY_INSTANCE_ID=$(shell_quote "$ZONEPLOY_INSTANCE_ID")
+ZONEPLOY_AGENT_TOKEN=$(shell_quote "$ZONEPLOY_AGENT_TOKEN")
+ZONEPLOY_PAIRED_AT=$(shell_quote "$ZONEPLOY_PAIRED_AT")
+ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS=$(shell_quote "$ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS")
 ENV
   chmod 600 "$ENV_FILE"
   ok "Wrote $ENV_FILE"
@@ -569,8 +593,14 @@ SHIM
 exec zoneploy-agent preflight "$@"
 SHIM
 
+  cat > /usr/local/bin/zoneploy-agent-pairing <<'SHIM'
+#!/usr/bin/env sh
+exec zoneploy-agent pairing "$@"
+SHIM
+
   chmod +x /usr/local/bin/zoneploy-agent \
     /usr/local/bin/zoneploy-agent-status \
+    /usr/local/bin/zoneploy-agent-pairing \
     /usr/local/bin/zoneploy-agent-debug \
     /usr/local/bin/zoneploy-agent-audit \
     /usr/local/bin/zoneploy-agent-preflight \
@@ -784,6 +814,7 @@ uninstall_zoneploy() {
 
   rm -f /usr/local/bin/zoneploy-agent \
     /usr/local/bin/zoneploy-agent-status \
+    /usr/local/bin/zoneploy-agent-pairing \
     /usr/local/bin/zoneploy-agent-preflight \
     /usr/local/bin/zoneploy-agent-debug \
     /usr/local/bin/zoneploy-agent-audit \
@@ -830,6 +861,7 @@ print_summary() {
 
 Commands:
   zoneploy-agent-status
+  zoneploy-agent-pairing
   zoneploy-agent-preflight
   zoneploy-agent-debug
   zoneploy-agent-audit
@@ -854,6 +886,7 @@ echo "  Profile:     ${ZONEPLOY_PROFILE}"
 echo "  Agent port:  ${ZONEPLOY_AGENT_PORT}"
 echo "  Registry:    ${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}"
 echo "  Traefik:     enabled=${ZONEPLOY_TRAEFIK_ENABLED}, httpPort=${ZONEPLOY_TRAEFIK_HTTP_PORT}"
+echo "  Cloud:       profile=${ZONEPLOY_PROFILE}, pollInterval=${ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS}s"
 echo "  Package mgr: ${PACKAGE_MANAGER}"
 echo ""
 

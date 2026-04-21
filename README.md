@@ -36,6 +36,8 @@ The initial agent skeleton exposes JSON commands that will remain stable as the 
 
 ```bash
 node apps/agent/dist/index.js status
+node apps/agent/dist/index.js pairing
+node apps/agent/dist/index.js pair --cloud-url https://api.zoneploy.com --token <one-time-token>
 node apps/agent/dist/index.js routes
 node apps/agent/dist/index.js addons
 node apps/agent/dist/index.js pairing
@@ -132,6 +134,9 @@ zoneploy-agent rollback --deployment demo-api --release <previous-release-id>
 zoneploy-agent remove --deployment demo-api
 zoneploy-agent cleanup
 zoneploy-agent cleanup --apply
+zoneploy-agent pairing
+zoneploy-agent pair --cloud-url https://api.zoneploy.com --token <one-time-token>
+zoneploy-agent unpair
 ```
 
 Images are tagged as:
@@ -152,6 +157,11 @@ Routes are stored under `/etc/zoneploy/runtime-routes` and rendered to Traefik's
 dynamic file provider at `/etc/zoneploy/traefik/dynamic/zoneploy.yml`.
 Removing a deployment also removes its attached routes and rewrites the Traefik
 dynamic config to avoid stale hosts.
+
+Paired mode uses an outbound polling model. The agent exchanges a one-time
+pairing token for an agent token, stores it in `/etc/zoneploy/config/agent.env`
+with `0600` permissions, then polls Zoneploy Cloud for typed commands. This
+means Cloud control does not require exposing the agent HTTP port publicly.
 
 Cleanup defaults to dry-run. Use `--apply` to delete release metadata, local
 Docker images and local registry manifests according to the configured count and

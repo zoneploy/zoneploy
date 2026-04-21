@@ -43,6 +43,8 @@ test("agent pairing command is unpaired by default", () => {
   const pairing = runAgent("pairing");
 
   assert.equal(pairing.paired, false);
+  assert.equal(pairing.agentTokenSet, false);
+  assert.equal(pairing.pairingTokenSet, false);
 });
 
 test("agent pairing command reports cloud pairing from environment", () => {
@@ -53,6 +55,7 @@ test("agent pairing command reports cloud pairing from environment", () => {
       ZONEPLOY_PROFILE: "paired",
       ZONEPLOY_CLOUD_URL: "https://api.zoneploy.com",
       ZONEPLOY_INSTANCE_ID: "instance-test",
+      ZONEPLOY_AGENT_TOKEN: "agent-token-test",
     },
   });
   const pairing = JSON.parse(output);
@@ -60,6 +63,7 @@ test("agent pairing command reports cloud pairing from environment", () => {
   assert.equal(pairing.paired, true);
   assert.equal(pairing.cloudUrl, "https://api.zoneploy.com");
   assert.equal(pairing.instanceId, "instance-test");
+  assert.equal(pairing.agentTokenSet, true);
 });
 
 test("agent preflight command returns host checks without crashing", () => {

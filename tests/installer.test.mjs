@@ -45,6 +45,7 @@ test("installer renders agent environment without leaking unset pairing values",
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_RELEASES=5/);
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_DAYS=14/);
   assert.match(env, /ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=20/);
+  assert.match(env, /ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS=30/);
   assert.doesNotMatch(env, /ZONEPLOY_PAIRING_TOKEN/);
 });
 
@@ -60,6 +61,7 @@ test("installer renders configurable registry and cleanup policy", () => {
       keepDays: 30,
       maxRegistryGb: 80,
     },
+    commandPollIntervalSeconds: 45,
     paths: createDefaultInstallPaths(),
   });
 
@@ -69,6 +71,7 @@ test("installer renders configurable registry and cleanup policy", () => {
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_RELEASES=9/);
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_DAYS=30/);
   assert.match(env, /ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=80/);
+  assert.match(env, /ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS=45/);
 });
 
 test("installer renders a systemd service for the persistent agent server", () => {

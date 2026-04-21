@@ -2,6 +2,7 @@ import type { DebugReport } from "@zoneploy/types";
 import { detectHostRuntime, getHostname, collectRuntimeServices } from "./detect.js";
 import { collectLocalRegistryStatus } from "./registry.js";
 import { createRouteSnapshot } from "./routes.js";
+import { createPairingState } from "./cloud-client.js";
 
 export type CollectDebugReportInput = {
   agentVersion: string;
@@ -18,7 +19,5 @@ export const collectDebugReport = async (
   registry: await collectLocalRegistryStatus(),
   routes: await createRouteSnapshot(),
   addons: [],
-  pairing: {
-    paired: false,
-  },
+  pairing: createPairingState(),
 });

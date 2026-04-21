@@ -11,6 +11,7 @@ export type AgentRuntimeConfig = {
   homeDir: string;
   sourceDir: string;
   configDir: string;
+  agentEnvFile: string;
   dataDir: string;
   logsDir: string;
   routesDir: string;
@@ -26,7 +27,11 @@ export type AgentRuntimeConfig = {
   traefikDynamicDir: string;
   cloudUrl?: string;
   instanceId?: string;
+  agentToken?: string;
+  pairedAt?: string;
+  commandPollIntervalSeconds: number;
   pairingTokenSet: boolean;
+  agentTokenSet: boolean;
 };
 
 export type CleanupPolicy = {

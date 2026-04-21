@@ -1,13 +1,19 @@
-import { loadAgentRuntimeConfig } from "@zoneploy/runtime";
-import type { PairingState } from "@zoneploy/types";
+import {
+  createPairingState,
+  pairAgentWithCloud,
+  unpairAgentFromCloud,
+} from "@zoneploy/runtime";
+import type { PairingRequest, PairingResult, PairingState } from "@zoneploy/types";
+import { agentVersion } from "./version.js";
 
 export const getPairingState = (): PairingState => {
-  const config = loadAgentRuntimeConfig();
-  const paired = config.profile === "paired" && Boolean(config.cloudUrl);
+  return createPairingState();
+};
 
-  return {
-    paired,
-    ...(config.cloudUrl ? { cloudUrl: config.cloudUrl } : {}),
-    ...(config.instanceId ? { instanceId: config.instanceId } : {}),
-  };
+export const runPairing = async (request: PairingRequest): Promise<PairingResult> => {
+  return pairAgentWithCloud(request, agentVersion);
+};
+
+export const runUnpairing = async (): Promise<PairingState> => {
+  return unpairAgentFromCloud();
 };

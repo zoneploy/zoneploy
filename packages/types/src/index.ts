@@ -1,6 +1,7 @@
 export type * from "./agent.js";
 export type * from "./addons.js";
 export type * from "./audit.js";
+export type * from "./cloud.js";
 export type * from "./debug.js";
 export type * from "./deployments.js";
 export type * from "./pairing.js";
