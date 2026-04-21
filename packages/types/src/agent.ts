@@ -16,6 +16,7 @@ export type AgentRuntimeConfig = {
   registryDir: string;
   buildsDir: string;
   releasesDir: string;
+  deploymentsDir: string;
   appsDir: string;
   cloudUrl?: string;
   instanceId?: string;

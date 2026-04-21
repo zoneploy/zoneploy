@@ -1,6 +1,7 @@
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
 import { runLocalBuild } from "./builds.js";
+import { getDeploymentSnapshot, runLocalDeploy } from "./deployments.js";
 import { getDebugReport } from "./debug.js";
 import { runAgentOperation } from "./operations.js";
 import { getPairingState } from "./pairing.js";
@@ -19,6 +20,8 @@ type AgentCommand =
   | "debug"
   | "audit"
   | "build"
+  | "deploy"
+  | "deployments"
   | "releases"
   | "serve"
   | "update"
@@ -34,6 +37,8 @@ const commands = new Set<AgentCommand>([
   "debug",
   "audit",
   "build",
+  "deploy",
+  "deployments",
   "releases",
   "serve",
   "update",
@@ -79,13 +84,44 @@ const parseBuildOptions = (args: string[]) => {
   };
 };
 
+const parsePort = (value: string | undefined, name: string): number => {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65_535) {
+    throw new Error(`${name} must be a valid TCP port.`);
+  }
+
+  return parsed;
+};
+
+const parseDeployOptions = (args: string[]) => {
+  const appId = readOption(args, ["--app", "--app-id"]);
+  const releaseId = readOption(args, ["--release", "--release-id"]);
+
+  if (!appId || !releaseId) {
+    throw new Error(
+      "Usage: zoneploy-agent deploy --app <app-id> --release <id> --port <container-port> [--host-port <port>] [--name <name>]",
+    );
+  }
+
+  return {
+    appId,
+    releaseId,
+    name: readOption(args, ["--name"]),
+    containerPort: parsePort(readOption(args, ["--port", "--container-port"]), "containerPort"),
+    hostPort: readOption(args, ["--host-port"])
+      ? parsePort(readOption(args, ["--host-port"]), "hostPort")
+      : undefined,
+  };
+};
+
 export const runCli = async (argv: string[]): Promise<number> => {
   const command = argv[2] ?? "status";
 
   if (!isAgentCommand(command)) {
     console.error(`Unknown command: ${command}`);
     console.error(
-      "Available commands: status, routes, addons, pairing, preflight, debug, audit, build, releases, serve, update, repair, uninstall",
+      "Available commands: status, routes, addons, pairing, preflight, debug, audit, build, deploy, deployments, releases, serve, update, repair, uninstall",
     );
     return 1;
   }
@@ -121,6 +157,18 @@ export const runCli = async (argv: string[]): Promise<number> => {
         console.error(error instanceof Error ? error.message : "Build failed.");
         return 1;
       }
+    case "deploy":
+      try {
+        const result = await runLocalDeploy(parseDeployOptions(argv.slice(3)));
+        printJson(result);
+        return result.deployment.status === "running" ? 0 : 1;
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : "Deploy failed.");
+        return 1;
+      }
+    case "deployments":
+      printJson(await getDeploymentSnapshot());
+      return 0;
     case "releases":
       printJson(await getReleaseSnapshot(argv[3]));
       return 0;

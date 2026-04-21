@@ -9,6 +9,7 @@ export type AgentInstallPaths = {
   registryDir: string;
   buildsDir: string;
   releasesDir: string;
+  deploymentsDir: string;
   appsDir: string;
   envFile: string;
 };
@@ -53,6 +54,7 @@ export const createDefaultInstallPaths = (homeDir = "/opt/zoneploy"): AgentInsta
     registryDir: `${dataDir}/registry`,
     buildsDir: `${dataDir}/builds`,
     releasesDir: `${dataDir}/releases`,
+    deploymentsDir: `${dataDir}/deployments`,
     appsDir: `${dataDir}/apps`,
     envFile: `${configDir}/agent.env`,
   };
@@ -98,6 +100,7 @@ export const renderAgentEnvironment = (options: AgentEnvironmentOptions): string
     envLine("ZONEPLOY_REGISTRY_DIR", options.paths.registryDir),
     envLine("ZONEPLOY_BUILDS_DIR", options.paths.buildsDir),
     envLine("ZONEPLOY_RELEASES_DIR", options.paths.releasesDir),
+    envLine("ZONEPLOY_DEPLOYMENTS_DIR", options.paths.deploymentsDir),
     envLine("ZONEPLOY_APPS_DIR", options.paths.appsDir),
     envLine("ZONEPLOY_CLEANUP_ENABLED", String(cleanupPolicy.enabled)),
     envLine("ZONEPLOY_CLEANUP_KEEP_RELEASES", cleanupPolicy.keepReleases),

@@ -63,6 +63,7 @@ export const loadAgentRuntimeConfig = (
     registryDir: optionalValue(env.ZONEPLOY_REGISTRY_DIR) ?? `${dataDir}/registry`,
     buildsDir: optionalValue(env.ZONEPLOY_BUILDS_DIR) ?? `${dataDir}/builds`,
     releasesDir: optionalValue(env.ZONEPLOY_RELEASES_DIR) ?? `${dataDir}/releases`,
+    deploymentsDir: optionalValue(env.ZONEPLOY_DEPLOYMENTS_DIR) ?? `${dataDir}/deployments`,
     appsDir: optionalValue(env.ZONEPLOY_APPS_DIR) ?? `${dataDir}/apps`,
     cloudUrl: optionalValue(env.ZONEPLOY_CLOUD_URL),
     instanceId: optionalValue(env.ZONEPLOY_INSTANCE_ID),

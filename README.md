@@ -44,6 +44,8 @@ node apps/agent/dist/index.js debug
 node apps/agent/dist/index.js audit
 node apps/agent/dist/index.js build --app demo --context /path/to/app
 node apps/agent/dist/index.js releases
+node apps/agent/dist/index.js deploy --app demo --release <release-id> --port 3000
+node apps/agent/dist/index.js deployments
 node apps/agent/dist/index.js serve
 node apps/agent/dist/index.js update
 node apps/agent/dist/index.js repair
@@ -106,6 +108,8 @@ local registry and store release metadata under `/var/lib/zoneploy/releases`.
 ```bash
 zoneploy-agent build --app demo-api --context /opt/demo-api
 zoneploy-agent releases demo-api
+zoneploy-agent deploy --app demo-api --release <release-id> --port 3000
+zoneploy-agent deployments
 ```
 
 Images are tagged as:
@@ -116,6 +120,11 @@ Images are tagged as:
 
 This keeps rollback candidates on the user's VPS instead of using Zoneploy
 Cloud storage or bandwidth.
+
+Local deploys are intentionally driven from a ready release. The deploy command
+replaces the previous managed container for the same app, runs the new image on
+the `zoneploy` Docker network and stores deployment metadata under
+`/var/lib/zoneploy/deployments`.
 
 ## License
 

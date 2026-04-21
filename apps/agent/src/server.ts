@@ -2,6 +2,7 @@ import http from "node:http";
 import { loadAgentRuntimeConfig } from "@zoneploy/runtime";
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
+import { getDeploymentSnapshot } from "./deployments.js";
 import { getDebugReport } from "./debug.js";
 import { getPairingState } from "./pairing.js";
 import { getPreflightReport } from "./preflight.js";
@@ -44,6 +45,7 @@ const routeHandlers = new Map<string, JsonHandler>([
   ["/audit", getAuditReport],
   ["/addons", listAvailableAddons],
   ["/routes", getRouteSnapshot],
+  ["/deployments", getDeploymentSnapshot],
   [
     "/releases",
     (request) => {
