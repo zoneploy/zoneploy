@@ -121,6 +121,8 @@ set -eu
 set -a
 [ -f "${envFile}" ] && . "${envFile}"
 set +a
+unset NODE_ENV
+export PNPM_CONFIG_PROD=false
 tmp="$(mktemp /tmp/zoneploy-install.XXXXXX)"
 cp "${sourceDir}/install.sh" "$tmp"
 set +e

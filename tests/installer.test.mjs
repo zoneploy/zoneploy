@@ -56,6 +56,8 @@ test("installer renders operation shim through a temporary install script copy",
   );
 
   assert.match(shim, /mktemp \/tmp\/zoneploy-install\.XXXXXX/);
+  assert.match(shim, /unset NODE_ENV/);
+  assert.match(shim, /PNPM_CONFIG_PROD=false/);
   assert.match(shim, /set \+e/);
   assert.match(shim, /bash "\$tmp" update "\$@"/);
   assert.match(shim, /set -e/);

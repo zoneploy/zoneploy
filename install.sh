@@ -381,8 +381,8 @@ prepare_source() {
 build_source() {
   echo "Building Zoneploy..."
   cd "$ZONEPLOY_SOURCE_DIR"
-  pnpm install --frozen-lockfile
-  pnpm build
+  CI=true NODE_ENV=development PNPM_CONFIG_PROD=false pnpm install --frozen-lockfile --prod=false
+  CI=true NODE_ENV=development PNPM_CONFIG_PROD=false pnpm build
 }
 
 shell_quote() {
@@ -426,6 +426,8 @@ set -eu
 set -a
 [ -f "$ENV_FILE" ] && . "$ENV_FILE"
 set +a
+unset NODE_ENV
+export PNPM_CONFIG_PROD=false
 tmp="\$(mktemp /tmp/zoneploy-install.XXXXXX)"
 cp "$ZONEPLOY_SOURCE_DIR/install.sh" "\$tmp"
 set +e
@@ -442,6 +444,8 @@ set -eu
 set -a
 [ -f "$ENV_FILE" ] && . "$ENV_FILE"
 set +a
+unset NODE_ENV
+export PNPM_CONFIG_PROD=false
 tmp="\$(mktemp /tmp/zoneploy-install.XXXXXX)"
 cp "$ZONEPLOY_SOURCE_DIR/install.sh" "\$tmp"
 set +e
@@ -458,6 +462,8 @@ set -eu
 set -a
 [ -f "$ENV_FILE" ] && . "$ENV_FILE"
 set +a
+unset NODE_ENV
+export PNPM_CONFIG_PROD=false
 tmp="\$(mktemp /tmp/zoneploy-install.XXXXXX)"
 cp "$ZONEPLOY_SOURCE_DIR/install.sh" "\$tmp"
 set +e
