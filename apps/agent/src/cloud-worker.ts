@@ -23,6 +23,7 @@ import {
 import { clearLocalRoutes, getRouteSnapshot, runLocalRoute, syncLocalRoutes } from "./routes.js";
 import { getAgentStatus } from "./status.js";
 import { runLocalRollback } from "./rollback.js";
+import { scheduleAgentOperation } from "./operations.js";
 import {
   clearLocalStackRuntimeRoutes,
   getLocalStackServices,
@@ -124,9 +125,9 @@ const executeCloudCommand = async (command: CloudCommand): Promise<unknown> => {
     case "preflight":
       return import("./preflight.js").then((module) => module.getPreflightReport());
     case "update":
-      return { ok: false, message: "Agent update through Cloud is not implemented in self-hosted runtime yet." };
+      return scheduleAgentOperation("update");
     case "decommission":
-      return { ok: false };
+      return scheduleAgentOperation("uninstall");
   }
 };
 

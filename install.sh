@@ -642,6 +642,8 @@ write_systemd_service() {
 Description=Zoneploy Self-Hosted Agent
 After=network-online.target docker.service
 Wants=network-online.target docker.service
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -651,8 +653,6 @@ EnvironmentFile=${ENV_FILE}
 ExecStart=/usr/local/bin/zoneploy-agent serve
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=120
-StartLimitBurst=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=${SERVICE_NAME}

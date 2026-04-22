@@ -141,6 +141,8 @@ export const renderSystemdService = (options: SystemdServiceOptions): string => 
 Description=${options.description ?? options.serviceName}
 After=network-online.target docker.service
 Wants=network-online.target docker.service
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -150,8 +152,6 @@ EnvironmentFile=${options.environmentFile}
 ExecStart=${options.command}
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=120
-StartLimitBurst=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=${options.serviceName}

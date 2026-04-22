@@ -38,12 +38,23 @@ const fetchJson = async <T>(
       },
     });
     const text = await response.text();
-    const body = text.length > 0 ? JSON.parse(text) : {};
+    let body: unknown = {};
+    try {
+      body = text.length > 0 ? JSON.parse(text) : {};
+    } catch {
+      const preview = text.replace(/\s+/g, " ").trim().slice(0, 160);
+      throw new Error(
+        response.ok
+          ? `Cloud response was not valid JSON${preview ? `: ${preview}` : "."}`
+          : `Cloud request failed with HTTP ${response.status}${preview ? `: ${preview}` : "."}`,
+      );
+    }
 
     if (!response.ok) {
+      const payload = body && typeof body === "object" ? body as { error?: { message?: unknown } } : {};
       const message =
-        typeof body?.error?.message === "string"
-          ? body.error.message
+        typeof payload.error?.message === "string"
+          ? payload.error.message
           : `Cloud request failed with HTTP ${response.status}.`;
       throw new Error(message);
     }

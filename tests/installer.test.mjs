@@ -88,6 +88,8 @@ test("installer renders a systemd service for the persistent agent server", () =
   assert.match(service, /ExecStart=\/usr\/local\/bin\/zoneploy-agent serve/);
   assert.match(service, /Restart=always/);
   assert.match(service, /User=root/);
+  assert.match(service.split("[Service]")[0], /StartLimitIntervalSec=120/);
+  assert.doesNotMatch(service.split("[Service]")[1], /StartLimitIntervalSec=120/);
 });
 
 test("installer renders command shim that loads the agent environment", () => {
