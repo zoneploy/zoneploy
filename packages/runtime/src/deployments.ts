@@ -11,6 +11,8 @@ import type {
   LocalDeploymentRemoveResult,
   LocalDeployRequest,
   LocalDeployResult,
+  LocalImageDeployRequest,
+  LocalImageDeployResult,
   LocalDeployment,
 } from "@zoneploy/types";
 import { runCommand } from "./commands.js";
@@ -95,6 +97,23 @@ export const readDeployment = async (name: string): Promise<LocalDeployment | nu
   return readDeploymentFile(deploymentPath(name));
 };
 
+export const findDeploymentByReference = async (
+  value: string,
+): Promise<LocalDeployment | null> => {
+  const byName = await readDeployment(normalizeDeploymentName(value));
+  if (byName) {
+    return byName;
+  }
+
+  const deployments = await listDeployments();
+  return deployments.find((deployment) => {
+    return deployment.id === value
+      || deployment.containerId === value
+      || deployment.containerName === value
+      || deployment.name === value;
+  }) ?? null;
+};
+
 export const deleteDeploymentMetadata = async (name: string): Promise<void> => {
   await rm(dirname(deploymentPath(name)), { recursive: true, force: true });
 };
@@ -162,7 +181,7 @@ export const createDeploymentSnapshot = async (): Promise<DeploymentSnapshot> =>
 };
 
 const readRequiredDeployment = async (deploymentName: string): Promise<LocalDeployment> => {
-  const deployment = await readDeployment(normalizeDeploymentName(deploymentName));
+  const deployment = await findDeploymentByReference(deploymentName);
 
   if (!deployment) {
     throw new Error("Deployment was not found.");
@@ -367,4 +386,156 @@ export const deployLocalRelease = async (
       error: undefined,
     }),
   };
+};
+
+const registryFromImage = (image: string): string | null => {
+  const firstSegment = image.split("/")[0];
+  if (!firstSegment) {
+    return null;
+  }
+
+  if (!firstSegment.includes(".") && !firstSegment.includes(":") && firstSegment !== "localhost") {
+    return null;
+  }
+
+  return firstSegment;
+};
+
+const inspectImageDigest = async (image: string): Promise<string> => {
+  const inspect = await runCommand(
+    "docker",
+    ["image", "inspect", "--format", "{{index .RepoDigests 0}}", image],
+    10_000,
+  );
+
+  return inspect.exitCode === 0 && inspect.stdout.trim()
+    ? inspect.stdout.trim()
+    : image;
+};
+
+export const deployExternalImage = async (
+  request: LocalImageDeployRequest,
+): Promise<LocalImageDeployResult> => {
+  assertPort(request.port, "port");
+
+  const name = normalizeDeploymentName(request.containerId);
+  const containerName = `zoneploy-${name}`;
+  const now = new Date().toISOString();
+  const previous = await readDeployment(name);
+  const initialDeployment: LocalDeployment = {
+    id: previous?.id ?? name,
+    appId: request.containerId,
+    name,
+    releaseId: request.image,
+    image: request.image,
+    containerName,
+    containerPort: request.port,
+    status: "unknown",
+    createdAt: previous?.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  await saveDeployment(initialDeployment);
+
+  if (request.registryUser && request.registryPassword) {
+    const registry = registryFromImage(request.image);
+    if (registry) {
+      const login = await runCommand(
+        "sh",
+        ["-lc", `printf '%s' "$ZONEPLOY_REGISTRY_PASSWORD" | docker login ${JSON.stringify(registry)} -u ${JSON.stringify(request.registryUser)} --password-stdin`],
+        {
+          timeoutMs: 60_000,
+          maxBuffer: 1024 * 1024,
+          env: { ZONEPLOY_REGISTRY_PASSWORD: request.registryPassword },
+        },
+      );
+
+      if (login.exitCode !== 0) {
+        throw new Error(login.stderr || login.stdout || "Docker registry login failed.");
+      }
+    }
+  }
+
+  const pull = await runCommand("docker", ["pull", request.image], {
+    timeoutMs: 10 * 60 * 1000,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+
+  if (pull.exitCode !== 0) {
+    const failed = await updateDeploymentStatus(initialDeployment, "failed", {
+      error: pull.stderr || pull.stdout || "Docker pull failed.",
+    });
+    throw new Error(failed.error ?? "Docker pull failed.");
+  }
+
+  await runCommand("docker", ["rm", "-f", containerName], 60_000);
+
+  const runArgs = [
+    "run",
+    "-d",
+    "--name",
+    containerName,
+    "--restart",
+    "unless-stopped",
+    "--network",
+    "zoneploy",
+    "--label",
+    deploymentLabel,
+    "--label",
+    `zoneploy.containerId=${request.containerId}`,
+  ];
+
+  for (const [key, value] of Object.entries(request.envVars ?? {})) {
+    runArgs.push("-e", `${key}=${value}`);
+  }
+
+  runArgs.push(request.image);
+
+  const run = await runCommand("docker", runArgs, {
+    timeoutMs: 60_000,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+
+  if (run.exitCode !== 0) {
+    const failed = await updateDeploymentStatus(initialDeployment, "failed", {
+      error: run.stderr || run.stdout || "Docker run failed.",
+    });
+    throw new Error(failed.error ?? "Docker run failed.");
+  }
+
+  const inspected = await inspectContainerStatus(containerName);
+  const deployment = await updateDeploymentStatus(initialDeployment, inspected.status, {
+    containerId: inspected.containerId,
+    error: undefined,
+  });
+
+  if (request.platformDomain && request.portMappings) {
+    const { syncLocalDeploymentRoutes } = await import("./routes.js");
+    await syncLocalDeploymentRoutes({
+      containerId: request.containerId,
+      nameOrId: deployment.name,
+      platformDomain: request.platformDomain,
+      portMappings: request.portMappings,
+    });
+  }
+
+  return {
+    dockerId: deployment.containerId ?? run.stdout.trim(),
+    imageDigest: await inspectImageDigest(request.image),
+    containerName,
+  };
+};
+
+export const inspectLocalDeployment = async (nameOrId: string): Promise<unknown> => {
+  const deployment = await readRequiredDeployment(nameOrId);
+  const inspect = await runCommand("docker", ["inspect", deployment.containerName], {
+    timeoutMs: 30_000,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+
+  if (inspect.exitCode !== 0) {
+    throw new Error(inspect.stderr || inspect.stdout || "Docker inspect failed.");
+  }
+
+  return JSON.parse(inspect.stdout) as unknown;
 };

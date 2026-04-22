@@ -15,6 +15,7 @@ export * from "./releases.js";
 export * from "./rollback.js";
 export * from "./routes.js";
 export * from "./status.js";
+export * from "./stacks.js";
 
 export type CommandResult = {
   exitCode: number;

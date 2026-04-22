@@ -11,6 +11,7 @@ export type RuntimePaths = {
   buildsDir: string;
   releasesDir: string;
   deploymentsDir: string;
+  stacksDir: string;
   appsDir: string;
 };
 
@@ -30,5 +31,6 @@ export const createRuntimePaths = (
   buildsDir: `${dataDir}/builds`,
   releasesDir: `${dataDir}/releases`,
   deploymentsDir: `${dataDir}/deployments`,
+  stacksDir: `${dataDir}/stacks`,
   appsDir: `${dataDir}/apps`,
 });

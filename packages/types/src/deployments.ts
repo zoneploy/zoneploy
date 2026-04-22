@@ -9,6 +9,31 @@ export type LocalDeployRequest = {
   env?: Record<string, string>;
 };
 
+export type ContainerPortMapping = {
+  port: number;
+  isPrimary: boolean;
+  zoneploySubdomains: string[];
+  customDomains: string[];
+};
+
+export type LocalImageDeployRequest = {
+  containerId: string;
+  image: string;
+  port: number;
+  envVars?: Record<string, string>;
+  platformDomain?: string;
+  portMappings?: ContainerPortMapping[];
+  healthcheckPath?: string | null;
+  registryUser?: string;
+  registryPassword?: string;
+};
+
+export type LocalImageDeployResult = {
+  dockerId: string;
+  imageDigest: string;
+  containerName: string;
+};
+
 export type LocalDeployment = {
   id: string;
   appId: string;

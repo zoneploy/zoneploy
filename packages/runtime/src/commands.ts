@@ -10,6 +10,7 @@ export type RunCommandOptions = {
   timeoutMs?: number;
   cwd?: string;
   maxBuffer?: number;
+  env?: NodeJS.ProcessEnv;
 };
 
 type ExecFileError = Error & {
@@ -53,6 +54,7 @@ export const runCommand = async (
         cwd: options.cwd,
         windowsHide: true,
         maxBuffer: options.maxBuffer ?? 1024 * 1024,
+        env: options.env ? { ...process.env, ...options.env } : process.env,
       },
       (error, stdout, stderr) => {
         if (error) {

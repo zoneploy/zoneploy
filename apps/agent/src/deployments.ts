@@ -1,6 +1,8 @@
 import {
   createDeploymentSnapshot,
+  deployExternalImage,
   deployLocalRelease,
+  inspectLocalDeployment,
   readLocalDeploymentLogs,
   removeLocalDeployment,
   runDeploymentLifecycleAction,
@@ -15,12 +17,20 @@ import type {
   LocalDeploymentRemoveResult,
   LocalDeployRequest,
   LocalDeployResult,
+  LocalImageDeployRequest,
+  LocalImageDeployResult,
 } from "@zoneploy/types";
 
 export const runLocalDeploy = async (
   options: LocalDeployRequest,
 ): Promise<LocalDeployResult> => {
   return deployLocalRelease(options);
+};
+
+export const runLocalImageDeploy = async (
+  options: LocalImageDeployRequest,
+): Promise<LocalImageDeployResult> => {
+  return deployExternalImage(options);
 };
 
 export const getDeploymentSnapshot = async (): Promise<DeploymentSnapshot> => {
@@ -44,4 +54,8 @@ export const getLocalDeploymentLogs = async (
   options: LocalDeploymentLogsRequest,
 ): Promise<LocalDeploymentLogsResult> => {
   return readLocalDeploymentLogs(options);
+};
+
+export const inspectDeployment = async (nameOrId: string): Promise<unknown> => {
+  return inspectLocalDeployment(nameOrId);
 };

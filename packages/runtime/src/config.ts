@@ -79,6 +79,7 @@ export const loadAgentRuntimeConfig = (
     buildsDir: optionalValue(env.ZONEPLOY_BUILDS_DIR) ?? `${dataDir}/builds`,
     releasesDir: optionalValue(env.ZONEPLOY_RELEASES_DIR) ?? `${dataDir}/releases`,
     deploymentsDir: optionalValue(env.ZONEPLOY_DEPLOYMENTS_DIR) ?? `${dataDir}/deployments`,
+    stacksDir: optionalValue(env.ZONEPLOY_STACKS_DIR) ?? `${dataDir}/stacks`,
     appsDir: optionalValue(env.ZONEPLOY_APPS_DIR) ?? `${dataDir}/apps`,
     traefikEnabled: readBoolean(env.ZONEPLOY_TRAEFIK_ENABLED, true),
     traefikHttpPort: readNumber(env.ZONEPLOY_TRAEFIK_HTTP_PORT, 80),

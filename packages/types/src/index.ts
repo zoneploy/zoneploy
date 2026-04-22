@@ -8,3 +8,4 @@ export type * from "./pairing.js";
 export type * from "./preflight.js";
 export type * from "./releases.js";
 export type * from "./routing.js";
+export type * from "./stacks.js";

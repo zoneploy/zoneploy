@@ -13,13 +13,25 @@ import { runLocalCleanup } from "./cleanup.js";
 import {
   getDeploymentSnapshot,
   getLocalDeploymentLogs,
+  inspectDeployment,
   runLocalDeploy,
+  runLocalImageDeploy,
   runLocalDeploymentAction,
   runLocalDeploymentRemove,
 } from "./deployments.js";
-import { getRouteSnapshot, runLocalRoute } from "./routes.js";
+import { clearLocalRoutes, getRouteSnapshot, runLocalRoute, syncLocalRoutes } from "./routes.js";
 import { getAgentStatus } from "./status.js";
 import { runLocalRollback } from "./rollback.js";
+import {
+  clearLocalStackRuntimeRoutes,
+  getLocalStackServices,
+  inspectLocalStackService,
+  runLocalStackAction,
+  runLocalStackDeploy,
+  runLocalStackRemove,
+  runLocalStackServiceAction,
+  syncLocalStackRuntimeRoutes,
+} from "./stacks.js";
 
 type WorkerHandle = {
   stop: () => void;
@@ -57,6 +69,38 @@ const executeCloudCommand = async (command: CloudCommand): Promise<unknown> => {
       return runLocalBuild(command.action.input);
     case "deploy":
       return runLocalDeploy(command.action.input);
+    case "container.deploy":
+      return runLocalImageDeploy(command.action.input);
+    case "container.lifecycle":
+      return runLocalDeploymentAction(command.action.action, {
+        deploymentName: command.action.input.containerId,
+      });
+    case "container.remove":
+      return runLocalDeploymentRemove({
+        deploymentName: command.action.input.containerId,
+      });
+    case "container.routes.sync":
+      return syncLocalRoutes(command.action.input);
+    case "container.routes.clear":
+      return clearLocalRoutes(command.action.input);
+    case "container.inspect":
+      return inspectDeployment(command.action.input.containerId);
+    case "stack.deploy":
+      return runLocalStackDeploy(command.action.input);
+    case "stack.lifecycle":
+      return runLocalStackAction(command.action.action, command.action.input);
+    case "stack.remove":
+      return runLocalStackRemove(command.action.input);
+    case "stack.routes.sync":
+      return syncLocalStackRuntimeRoutes(command.action.input);
+    case "stack.routes.clear":
+      return clearLocalStackRuntimeRoutes(command.action.input);
+    case "stack.services":
+      return getLocalStackServices(command.action.input);
+    case "stack.service.lifecycle":
+      return runLocalStackServiceAction(command.action.action, command.action.input);
+    case "stack.service.inspect":
+      return inspectLocalStackService(command.action.input);
     case "lifecycle":
       return runLocalDeploymentAction(command.action.action, command.action.input);
     case "logs":
@@ -69,6 +113,14 @@ const executeCloudCommand = async (command: CloudCommand): Promise<unknown> => {
       return runLocalRollback(command.action.input);
     case "cleanup":
       return runLocalCleanup(command.action.apply !== true);
+    case "audit":
+      return import("./audit.js").then((module) => module.getAuditReport());
+    case "preflight":
+      return import("./preflight.js").then((module) => module.getPreflightReport());
+    case "update":
+      return { ok: false, message: "Agent update through Cloud is not implemented in self-hosted runtime yet." };
+    case "decommission":
+      return { ok: false };
   }
 };
 

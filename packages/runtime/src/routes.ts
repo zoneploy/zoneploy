@@ -1,8 +1,13 @@
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type {
+  LocalRouteClearRequest,
   LocalRouteRequest,
   LocalRouteResult,
+  LocalRouteSyncRequest,
+  LocalRouteSyncResult,
+  LocalStackRouteClearRequest,
+  LocalStackRouteSyncRequest,
   RouteDefinition,
   RouteSnapshot,
 } from "@zoneploy/types";
@@ -189,3 +194,171 @@ export const routeLocalDeployment = async (
     traefikFile,
   };
 };
+
+export const syncLocalDeploymentRoutes = async (
+  request: LocalRouteSyncRequest,
+): Promise<LocalRouteSyncResult> => {
+  const { findDeploymentByReference } = await import("./deployments.js");
+  const deployment = await findDeploymentByReference(request.nameOrId);
+
+  if (!deployment || deployment.status !== "running") {
+    throw new Error("A running deployment is required before routing.");
+  }
+
+  const routes: RouteDefinition[] = [];
+
+  for (const mapping of request.portMappings) {
+    for (const subdomain of mapping.zoneploySubdomains) {
+      routes.push({
+        host: normalizeHost(`${subdomain}.${request.platformDomain}`),
+        protocol: "http",
+        source: "zoneploy-domain",
+        target: {
+          serviceName: deployment.name,
+          containerName: deployment.containerName,
+          port: mapping.port,
+        },
+      });
+    }
+
+    for (const hostname of mapping.customDomains) {
+      routes.push({
+        host: normalizeHost(hostname),
+        protocol: "http",
+        source: "custom-domain",
+        target: {
+          serviceName: deployment.name,
+          containerName: deployment.containerName,
+          port: mapping.port,
+        },
+      });
+    }
+  }
+
+  const existing = await listRoutes();
+  const nextRoutes = existing.filter((route) => {
+    return route.target.serviceName !== deployment.name
+      && route.target.containerName !== deployment.containerName;
+  });
+
+  for (const route of existing) {
+    if (
+      route.target.serviceName === deployment.name ||
+      route.target.containerName === deployment.containerName
+    ) {
+      await rm(routeDirectoryPath(route.host), { recursive: true, force: true });
+    }
+  }
+
+  for (const route of routes) {
+    await writeJsonFile(routePath(route.host), route);
+    nextRoutes.push(route);
+  }
+
+  const traefikFile = await writeTraefikDynamicConfig();
+
+  return {
+    routes: sortRoutes(nextRoutes),
+    traefikFile,
+  };
+};
+
+export const clearLocalDeploymentRoutes = async (
+  request: LocalRouteClearRequest,
+) => {
+  const { findDeploymentByReference } = await import("./deployments.js");
+  const deployment = await findDeploymentByReference(request.deploymentName ?? request.containerId);
+
+  if (!deployment) {
+    return { removedRoutes: [] };
+  }
+
+  return {
+    removedRoutes: await removeRoutesForDeployment(deployment.name, deployment.containerName),
+  };
+};
+
+export const removeRoutesForStack = async (
+  stackId: string,
+  projectName: string,
+): Promise<string[]> => {
+  const routes = await listRoutes();
+  const removedHosts: string[] = [];
+
+  for (const route of routes) {
+    const target = route.target.serviceName;
+    if (!target.startsWith(`${stackId}:`) && !target.startsWith(`${projectName}:`)) {
+      continue;
+    }
+
+    await rm(routeDirectoryPath(route.host), { recursive: true, force: true });
+    removedHosts.push(route.host);
+  }
+
+  if (removedHosts.length > 0) {
+    await writeTraefikDynamicConfig();
+  }
+
+  return removedHosts.sort();
+};
+
+export const syncLocalStackRoutes = async (
+  request: LocalStackRouteSyncRequest,
+): Promise<LocalRouteSyncResult> => {
+  const { findStackServiceContainer } = await import("./stacks.js");
+  const routes: RouteDefinition[] = [];
+
+  for (const mapping of request.domainMappings) {
+    const service = await findStackServiceContainer(request.projectName, mapping.serviceName);
+    if (!service) {
+      continue;
+    }
+
+    const serviceKey = `${request.stackId}:${mapping.serviceName}`;
+
+    for (const subdomain of mapping.zoneploySubdomains) {
+      routes.push({
+        host: normalizeHost(`${subdomain}.${request.platformDomain}`),
+        protocol: "http",
+        source: "zoneploy-domain",
+        target: {
+          serviceName: serviceKey,
+          containerName: service.containerName,
+          port: mapping.port,
+        },
+      });
+    }
+
+    for (const hostname of mapping.customDomains) {
+      routes.push({
+        host: normalizeHost(hostname),
+        protocol: "http",
+        source: "custom-domain",
+        target: {
+          serviceName: serviceKey,
+          containerName: service.containerName,
+          port: mapping.port,
+        },
+      });
+    }
+  }
+
+  await removeRoutesForStack(request.stackId, request.projectName);
+
+  for (const route of routes) {
+    await writeJsonFile(routePath(route.host), route);
+  }
+
+  const traefikFile = await writeTraefikDynamicConfig();
+
+  return {
+    routes: await listRoutes(),
+    traefikFile,
+  };
+};
+
+export const clearLocalStackRoutes = async (
+  request: LocalStackRouteClearRequest,
+) => ({
+  removedRoutes: await removeRoutesForStack(request.stackId, request.projectName),
+});

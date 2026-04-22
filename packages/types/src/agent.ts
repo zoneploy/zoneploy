@@ -21,6 +21,7 @@ export type AgentRuntimeConfig = {
   buildsDir: string;
   releasesDir: string;
   deploymentsDir: string;
+  stacksDir: string;
   appsDir: string;
   traefikEnabled: boolean;
   traefikHttpPort: number;
