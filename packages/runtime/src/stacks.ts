@@ -1,6 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import type {
+  LocalGitStackDeployRequest,
+  LocalGitStackDeployResult,
   LocalStackDeployRequest,
   LocalStackDeployResult,
   LocalStackLifecycleAction,
@@ -8,8 +10,10 @@ import type {
   LocalStackServiceLifecycleRequest,
   LocalStackServiceRuntime,
 } from "@zoneploy/types";
+import { checkoutGitSource } from "./builds.js";
 import { runCommand } from "./commands.js";
 import { loadAgentRuntimeConfig } from "./config.js";
+import { createLocalImageReference, createReleaseId } from "./releases.js";
 import { removeRoutesForStack, syncLocalStackRoutes } from "./routes.js";
 
 const safeIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
@@ -107,6 +111,125 @@ const renderOverrideFile = (services: string[]): string => {
   lines.push("    external: true");
 
   return `${lines.join("\n")}\n`;
+};
+
+const renderImageOverrideFile = (images: Record<string, string>): string => {
+  const lines = ["services:"];
+
+  for (const [service, image] of Object.entries(images).sort(([left], [right]) => left.localeCompare(right))) {
+    lines.push(`  ${service}:`);
+    lines.push(`    image: ${JSON.stringify(image)}`);
+  }
+
+  return `${lines.join("\n")}\n`;
+};
+
+const scalarToYaml = (value: unknown): string => {
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(String(value));
+};
+
+const objectToYaml = (value: unknown, indent = 0): string => {
+  const pad = " ".repeat(indent);
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+
+    return value
+      .map((item) => {
+        if (item && typeof item === "object") {
+          return `${pad}-\n${objectToYaml(item, indent + 2)}`;
+        }
+
+        return `${pad}- ${scalarToYaml(item)}`;
+      })
+      .join("\n");
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return "{}";
+
+    return entries
+      .map(([key, item]) => {
+        const safeKey = /^[A-Za-z0-9._-]+$/.test(key) ? key : JSON.stringify(key);
+
+        if (Array.isArray(item)) {
+          return item.length === 0
+            ? `${pad}${safeKey}: []`
+            : `${pad}${safeKey}:\n${objectToYaml(item, indent + 2)}`;
+        }
+
+        if (item && typeof item === "object") {
+          return `${pad}${safeKey}:\n${objectToYaml(item, indent + 2)}`;
+        }
+
+        return `${pad}${safeKey}: ${scalarToYaml(item)}`;
+      })
+      .join("\n");
+  }
+
+  return `${pad}${scalarToYaml(value)}`;
+};
+
+const composeConfigAsJson = async (
+  composePath: string,
+  overridePath?: string,
+): Promise<Record<string, unknown>> => {
+  const args = ["compose", "-f", composePath];
+  if (overridePath) {
+    args.push("-f", overridePath);
+  }
+  args.push("config", "--format", "json");
+
+  const result = await runCommand("docker", args, {
+    cwd: dirname(composePath),
+    timeoutMs: 60_000,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr || result.stdout || "Docker compose config failed.");
+  }
+
+  return JSON.parse(result.stdout) as Record<string, unknown>;
+};
+
+const buildableServicesFromCompose = async (composePath: string): Promise<string[]> => {
+  const config = await composeConfigAsJson(composePath);
+  const services = config.services;
+
+  if (!services || typeof services !== "object" || Array.isArray(services)) {
+    throw new Error("docker-compose.yml must declare services.");
+  }
+
+  return Object.entries(services as Record<string, unknown>)
+    .filter(([, service]) => Boolean((service as { build?: unknown })?.build))
+    .map(([service]) => service)
+    .sort();
+};
+
+const cleanComposeContent = async (
+  composePath: string,
+  overridePath: string,
+  buildableServices: string[],
+): Promise<string> => {
+  const config = await composeConfigAsJson(composePath, overridePath);
+  const services = config.services;
+
+  if (!services || typeof services !== "object" || Array.isArray(services)) {
+    throw new Error("docker-compose.yml must declare services.");
+  }
+
+  for (const service of buildableServices) {
+    const serviceConfig = (services as Record<string, Record<string, unknown>>)[service];
+    if (serviceConfig) {
+      delete serviceConfig.build;
+    }
+  }
+
+  return `${objectToYaml(config)}\n`;
 };
 
 const imageRegistriesFromCompose = (composeContent: string): string[] => {
@@ -284,6 +407,88 @@ export const deployLocalStack = async (
   };
 };
 
+export const deployLocalGitStack = async (
+  request: LocalGitStackDeployRequest,
+): Promise<LocalGitStackDeployResult> => {
+  const releaseId = request.releaseId ?? createReleaseId();
+  const checkout = await checkoutGitSource(
+    {
+      ...request.git,
+      contextPath: request.git.contextPath ?? ".",
+    },
+    releaseId,
+  );
+  const composePath = resolve(checkout.checkoutDir, request.git.composeFile ?? "docker-compose.yml");
+  const relativeComposePath = relative(checkout.checkoutDir, composePath);
+
+  if (relativeComposePath.startsWith("..") || resolve(relativeComposePath) === relativeComposePath) {
+    throw new Error("git.composeFile must be inside the repository.");
+  }
+
+  await readFile(composePath, "utf8");
+
+  const buildableServices = await buildableServicesFromCompose(composePath);
+  const images: Record<string, string> = {};
+
+  for (const service of buildableServices) {
+    images[service] = createLocalImageReference({
+      appId: `${request.stackId}-${service}`,
+      releaseId,
+    }).image;
+  }
+
+  let composeContent = request.composeContent;
+
+  if (buildableServices.length > 0) {
+    const overridePath = join(checkout.checkoutDir, ".zoneploy-images.override.yml");
+    await writeFile(overridePath, renderImageOverrideFile(images), "utf8");
+
+    const build = await runCommand(
+      "docker",
+      ["compose", "-f", composePath, "-f", overridePath, "build", ...buildableServices],
+      {
+        cwd: dirname(composePath),
+        timeoutMs: 30 * 60_000,
+        maxBuffer: 50 * 1024 * 1024,
+      },
+    );
+
+    if (build.exitCode !== 0) {
+      throw new Error(build.stderr || build.stdout || "Docker compose build failed.");
+    }
+
+    for (const image of Object.values(images)) {
+      const push = await runCommand("docker", ["push", image], {
+        timeoutMs: 10 * 60_000,
+        maxBuffer: 16 * 1024 * 1024,
+      });
+
+      if (push.exitCode !== 0) {
+        throw new Error(push.stderr || push.stdout || `Docker push failed for ${image}.`);
+      }
+    }
+
+    composeContent = await cleanComposeContent(composePath, overridePath, buildableServices);
+  } else if (!composeContent?.trim()) {
+    composeContent = await readFile(composePath, "utf8");
+  }
+
+  const result = await deployLocalStack({
+    stackId: request.stackId,
+    projectName: request.projectName,
+    composeContent,
+    envVars: request.envVars,
+    platformDomain: request.platformDomain,
+    domainMappings: request.domainMappings,
+  });
+
+  return {
+    ...result,
+    releaseId,
+    images,
+  };
+};
+
 export const runStackLifecycleAction = async (
   action: LocalStackLifecycleAction,
   request: LocalStackLifecycleRequest,
@@ -333,4 +538,3 @@ export const inspectStackService = async (
 export const getDeclaredStackServices = async (stackId: string): Promise<string[]> => {
   return listDeclaredServices(await readComposeContent(stackId));
 };
-

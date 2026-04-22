@@ -11,10 +11,13 @@ import type {
   LocalDeploymentRemoveResult,
   LocalDeployRequest,
   LocalDeployResult,
+  LocalGitImageDeployRequest,
+  LocalGitImageDeployResult,
   LocalImageDeployRequest,
   LocalImageDeployResult,
   LocalDeployment,
 } from "@zoneploy/types";
+import { buildAndPushGitImage } from "./builds.js";
 import { runCommand } from "./commands.js";
 import { loadAgentRuntimeConfig } from "./config.js";
 import { readRelease } from "./releases.js";
@@ -523,6 +526,36 @@ export const deployExternalImage = async (
     dockerId: deployment.containerId ?? run.stdout.trim(),
     imageDigest: await inspectImageDigest(request.image),
     containerName,
+  };
+};
+
+export const buildAndDeployGitImage = async (
+  request: LocalGitImageDeployRequest,
+): Promise<LocalGitImageDeployResult> => {
+  const build = await buildAndPushGitImage({
+    appId: request.containerId,
+    git: request.git,
+    releaseId: request.releaseId,
+  });
+
+  if (build.release.status !== "ready") {
+    throw new Error(build.release.error ?? "Docker build failed.");
+  }
+
+  const result = await deployExternalImage({
+    containerId: request.containerId,
+    image: build.release.image,
+    port: request.port,
+    envVars: request.envVars,
+    platformDomain: request.platformDomain,
+    portMappings: request.portMappings,
+    healthcheckPath: request.healthcheckPath,
+  });
+
+  return {
+    ...result,
+    image: build.release.image,
+    releaseId: build.release.id,
   };
 };
 

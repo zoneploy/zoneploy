@@ -1,5 +1,6 @@
 import {
   clearLocalStackRoutes,
+  deployLocalGitStack,
   deployLocalStack,
   inspectStackService,
   listStackServices,
@@ -11,6 +12,8 @@ import {
 import type {
   LocalRouteClearResult,
   LocalRouteSyncResult,
+  LocalGitStackDeployRequest,
+  LocalGitStackDeployResult,
   LocalStackDeployRequest,
   LocalStackDeployResult,
   LocalStackLifecycleAction,
@@ -24,6 +27,10 @@ import type {
 export const runLocalStackDeploy = async (
   options: LocalStackDeployRequest,
 ): Promise<LocalStackDeployResult> => deployLocalStack(options);
+
+export const runLocalGitStackDeploy = async (
+  options: LocalGitStackDeployRequest,
+): Promise<LocalGitStackDeployResult> => deployLocalGitStack(options);
 
 export const getLocalStackServices = async (
   options: LocalStackLifecycleRequest,
@@ -54,4 +61,3 @@ export const syncLocalStackRuntimeRoutes = async (
 export const clearLocalStackRuntimeRoutes = async (
   options: LocalStackRouteClearRequest,
 ): Promise<LocalRouteClearResult> => clearLocalStackRoutes(options);
-

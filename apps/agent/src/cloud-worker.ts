@@ -15,6 +15,7 @@ import {
   getLocalDeploymentLogs,
   inspectDeployment,
   runLocalDeploy,
+  runLocalGitImageDeploy,
   runLocalImageDeploy,
   runLocalDeploymentAction,
   runLocalDeploymentRemove,
@@ -27,6 +28,7 @@ import {
   getLocalStackServices,
   inspectLocalStackService,
   runLocalStackAction,
+  runLocalGitStackDeploy,
   runLocalStackDeploy,
   runLocalStackRemove,
   runLocalStackServiceAction,
@@ -71,6 +73,8 @@ const executeCloudCommand = async (command: CloudCommand): Promise<unknown> => {
       return runLocalDeploy(command.action.input);
     case "container.deploy":
       return runLocalImageDeploy(command.action.input);
+    case "container.buildDeploy":
+      return runLocalGitImageDeploy(command.action.input);
     case "container.lifecycle":
       return runLocalDeploymentAction(command.action.action, {
         deploymentName: command.action.input.containerId,
@@ -87,6 +91,8 @@ const executeCloudCommand = async (command: CloudCommand): Promise<unknown> => {
       return inspectDeployment(command.action.input.containerId);
     case "stack.deploy":
       return runLocalStackDeploy(command.action.input);
+    case "stack.buildDeploy":
+      return runLocalGitStackDeploy(command.action.input);
     case "stack.lifecycle":
       return runLocalStackAction(command.action.action, command.action.input);
     case "stack.remove":

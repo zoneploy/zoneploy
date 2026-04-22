@@ -1,4 +1,4 @@
-import type { DeploymentLifecycleAction } from "./deployments.js";
+import type { DeploymentLifecycleAction, LocalGitSource } from "./deployments.js";
 import type { LocalRoutePortMapping } from "./routing.js";
 
 export type StackDomainMapping = LocalRoutePortMapping & {
@@ -18,6 +18,19 @@ export type LocalStackDeployRequest = {
   registryPassword?: string;
 };
 
+export type LocalGitStackSource = LocalGitSource & {
+  composeFile?: string;
+};
+
+export type LocalGitStackDeployRequest = Omit<
+  LocalStackDeployRequest,
+  "composeContent" | "registryHost" | "registryUser" | "registryPassword"
+> & {
+  composeContent?: string;
+  git: LocalGitStackSource;
+  releaseId?: string;
+};
+
 export type LocalStackServiceRuntime = {
   serviceName: string;
   containerName: string;
@@ -27,6 +40,11 @@ export type LocalStackServiceRuntime = {
 
 export type LocalStackDeployResult = {
   services: string[];
+};
+
+export type LocalGitStackDeployResult = LocalStackDeployResult & {
+  releaseId: string;
+  images: Record<string, string>;
 };
 
 export type LocalStackLifecycleRequest = {
@@ -51,4 +69,3 @@ export type LocalStackRouteClearRequest = {
   stackId: string;
   projectName: string;
 };
-

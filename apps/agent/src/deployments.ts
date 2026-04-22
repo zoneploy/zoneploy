@@ -1,5 +1,6 @@
 import {
   createDeploymentSnapshot,
+  buildAndDeployGitImage,
   deployExternalImage,
   deployLocalRelease,
   inspectLocalDeployment,
@@ -17,6 +18,8 @@ import type {
   LocalDeploymentRemoveResult,
   LocalDeployRequest,
   LocalDeployResult,
+  LocalGitImageDeployRequest,
+  LocalGitImageDeployResult,
   LocalImageDeployRequest,
   LocalImageDeployResult,
 } from "@zoneploy/types";
@@ -31,6 +34,12 @@ export const runLocalImageDeploy = async (
   options: LocalImageDeployRequest,
 ): Promise<LocalImageDeployResult> => {
   return deployExternalImage(options);
+};
+
+export const runLocalGitImageDeploy = async (
+  options: LocalGitImageDeployRequest,
+): Promise<LocalGitImageDeployResult> => {
+  return buildAndDeployGitImage(options);
 };
 
 export const getDeploymentSnapshot = async (): Promise<DeploymentSnapshot> => {

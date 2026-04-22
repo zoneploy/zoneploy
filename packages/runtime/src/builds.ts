@@ -1,6 +1,7 @@
-import { stat } from "node:fs/promises";
-import { resolve } from "node:path";
-import type { DeploymentRelease, LocalBuildRequest, LocalBuildResult } from "@zoneploy/types";
+import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import type { DeploymentRelease, LocalBuildRequest, LocalBuildResult, LocalGitSource } from "@zoneploy/types";
 import { runCommand, type RuntimeCommandResult } from "./commands.js";
 import {
   createLocalImageReference,
@@ -8,6 +9,7 @@ import {
   saveRelease,
   updateReleaseStatus,
 } from "./releases.js";
+import { loadAgentRuntimeConfig } from "./config.js";
 
 const commandMaxBuffer = 50 * 1024 * 1024;
 const commandTimeoutMs = 30 * 60 * 1000;
@@ -38,6 +40,127 @@ const assertFile = async (path: string): Promise<void> => {
   if (!info.isFile()) {
     throw new Error(`${path} is not a file.`);
   }
+};
+
+const assertRelativePath = (path: string, label: string): string => {
+  const value = path.trim() || ".";
+
+  if (value.startsWith("/") || value.includes("..")) {
+    throw new Error(`${label} must be a relative path inside the repository.`);
+  }
+
+  return value;
+};
+
+const createAskpassScript = async (token: string): Promise<string> => {
+  const dir = await mkdtemp(join(tmpdir(), "zoneploy-git-askpass-"));
+  const scriptPath = join(dir, "askpass.sh");
+  const escapedToken = token.replaceAll("'", "'\"'\"'");
+
+  await writeFile(
+    scriptPath,
+    `#!/usr/bin/env sh
+case "$1" in
+  *Username*) printf '%s\\n' 'x-access-token' ;;
+  *) printf '%s\\n' '${escapedToken}' ;;
+esac
+`,
+    "utf8",
+  );
+  await chmod(scriptPath, 0o700);
+
+  return scriptPath;
+};
+
+const normalizeRef = (ref?: string): string | undefined => {
+  const value = ref?.trim();
+  if (!value) return undefined;
+  return value.replace(/^refs\/heads\//, "").replace(/^refs\/tags\//, "");
+};
+
+export const checkoutGitSource = async (
+  source: LocalGitSource,
+  releaseId: string,
+): Promise<{ checkoutDir: string; contextDir: string; dockerfile: string }> => {
+  const repository = source.repository.trim();
+  if (!repository) {
+    throw new Error("git.repository is required.");
+  }
+
+  const config = loadAgentRuntimeConfig();
+  const checkoutRoot = join(config.buildsDir, "git", releaseId);
+  const checkoutDir = join(checkoutRoot, "source");
+  const contextPath = assertRelativePath(source.contextPath ?? ".", "git.contextPath");
+  const dockerfile = assertRelativePath(source.dockerfile ?? "Dockerfile", "git.dockerfile");
+  const ref = normalizeRef(source.ref);
+  let askpassScript: string | null = null;
+
+  await rm(checkoutRoot, { recursive: true, force: true });
+  await mkdir(checkoutRoot, { recursive: true });
+
+  const cloneArgs = ["clone", "--depth", "1"];
+  if (ref) {
+    cloneArgs.push("--branch", ref);
+  }
+  cloneArgs.push(repository, checkoutDir);
+
+  const env: NodeJS.ProcessEnv = {
+    GIT_TERMINAL_PROMPT: "0",
+  };
+
+  if (source.token?.trim()) {
+    askpassScript = await createAskpassScript(source.token.trim());
+    env.GIT_ASKPASS = askpassScript;
+  }
+
+  try {
+    const clone = await runCommand("git", cloneArgs, {
+      timeoutMs: 5 * 60_000,
+      maxBuffer: 16 * 1024 * 1024,
+      env,
+    });
+
+    if (clone.exitCode !== 0) {
+      throw new Error(clone.stderr || clone.stdout || "Git clone failed.");
+    }
+
+    if (source.commitSha?.trim()) {
+      const checkout = await runCommand("git", ["checkout", "--detach", source.commitSha.trim()], {
+        cwd: checkoutDir,
+        timeoutMs: 60_000,
+        maxBuffer: 4 * 1024 * 1024,
+        env,
+      });
+
+      if (checkout.exitCode !== 0) {
+        throw new Error(checkout.stderr || checkout.stdout || "Git checkout failed.");
+      }
+    }
+  } finally {
+    if (askpassScript) {
+      await rm(resolve(askpassScript, ".."), { recursive: true, force: true });
+    }
+  }
+
+  return {
+    checkoutDir,
+    contextDir: resolve(checkoutDir, contextPath),
+    dockerfile,
+  };
+};
+
+export const buildAndPushGitImage = async (
+  request: Omit<LocalBuildRequest, "contextDir"> & { git: LocalGitSource },
+): Promise<LocalBuildResult> => {
+  const releaseId = request.releaseId ?? createReleaseId();
+  const checkout = await checkoutGitSource(request.git, releaseId);
+
+  return buildAndPushLocalImage({
+    appId: request.appId,
+    contextDir: checkout.contextDir,
+    dockerfile: checkout.dockerfile,
+    releaseId,
+  });
 };
 
 const createInitialRelease = (input: {

@@ -34,6 +34,28 @@ export type LocalImageDeployResult = {
   containerName: string;
 };
 
+export type LocalGitSource = {
+  repository: string;
+  ref?: string;
+  commitSha?: string;
+  token?: string;
+  contextPath?: string;
+  dockerfile?: string;
+};
+
+export type LocalGitImageDeployRequest = Omit<
+  LocalImageDeployRequest,
+  "image" | "registryUser" | "registryPassword"
+> & {
+  git: LocalGitSource;
+  releaseId?: string;
+};
+
+export type LocalGitImageDeployResult = LocalImageDeployResult & {
+  image: string;
+  releaseId: string;
+};
+
 export type LocalDeployment = {
   id: string;
   appId: string;

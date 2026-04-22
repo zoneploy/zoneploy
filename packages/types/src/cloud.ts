@@ -2,6 +2,7 @@ import type { LocalBuildRequest } from "./releases.js";
 import type {
   DeploymentLifecycleAction,
   LocalImageDeployRequest,
+  LocalGitImageDeployRequest,
   LocalDeploymentLogsRequest,
   LocalDeployRequest,
 } from "./deployments.js";
@@ -12,6 +13,7 @@ import type { RouteSnapshot } from "./routing.js";
 import type { DeploymentSnapshot } from "./deployments.js";
 import type {
   LocalStackDeployRequest,
+  LocalGitStackDeployRequest,
   LocalStackLifecycleAction,
   LocalStackLifecycleRequest,
   LocalStackRouteClearRequest,
@@ -26,12 +28,14 @@ export type CloudCommandAction =
   | { type: "build"; input: LocalBuildRequest }
   | { type: "deploy"; input: LocalDeployRequest }
   | { type: "container.deploy"; input: LocalImageDeployRequest }
+  | { type: "container.buildDeploy"; input: LocalGitImageDeployRequest }
   | { type: "container.lifecycle"; action: DeploymentLifecycleAction; input: { containerId: string } }
   | { type: "container.remove"; input: { containerId: string } }
   | { type: "container.routes.sync"; input: LocalRouteSyncRequest }
   | { type: "container.routes.clear"; input: LocalRouteClearRequest }
   | { type: "container.inspect"; input: { containerId: string } }
   | { type: "stack.deploy"; input: LocalStackDeployRequest }
+  | { type: "stack.buildDeploy"; input: LocalGitStackDeployRequest }
   | { type: "stack.lifecycle"; action: LocalStackLifecycleAction; input: LocalStackLifecycleRequest }
   | { type: "stack.remove"; input: LocalStackLifecycleRequest }
   | { type: "stack.routes.sync"; input: LocalStackRouteSyncRequest }
