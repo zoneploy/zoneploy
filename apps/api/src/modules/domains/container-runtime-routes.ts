@@ -27,6 +27,7 @@ type ContainerRuntimeLike = {
 
 type ServerRuntimeLike = {
   status: string
+  agentMode?: string | null
 }
 
 type SyncContainerRoutesDeps = {
@@ -87,7 +88,7 @@ export async function syncContainerRuntimeRoutesWithDeps(containerId: string, de
 
   const server = await deps.getServer(container.serverId)
 
-  if (!server || server.status !== 'online') {
+  if (!server || (server.status !== 'online' && server.agentMode !== 'self_hosted')) {
     await deps.markNeedsRedeploy(containerId)
     return false
   }

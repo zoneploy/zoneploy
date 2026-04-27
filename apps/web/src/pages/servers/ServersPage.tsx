@@ -580,7 +580,8 @@ function ServerCard({
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const liveMetrics = useServerMetricsLive(orgId, server.id, server.status === 'online')
+  const runtimeAvailable = server.status === 'online' || server.agentMode === 'self_hosted'
+  const liveMetrics = useServerMetricsLive(orgId, server.id, runtimeAvailable)
   const [showProvisionLogs, setShowProvisionLogs] = useState(false)
   const [showTerminal, setShowTerminal] = useState(false)
   const [showAudit, setShowAudit] = useState(false)
@@ -627,7 +628,7 @@ function ServerCard({
           </div>
 
           <div className="ml-2 flex shrink-0 items-center gap-1">
-            {canOpenTerminal && server.status === 'online' && (
+            {canOpenTerminal && runtimeAvailable && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -638,7 +639,7 @@ function ServerCard({
                 <TerminalSquare size={14} />
               </Button>
             )}
-            {server.status === 'online' && (
+            {runtimeAvailable && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -649,7 +650,7 @@ function ServerCard({
                 <ShieldCheck size={14} />
               </Button>
             )}
-            {canManage && server.status === 'online' && (
+            {canManage && runtimeAvailable && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -693,7 +694,7 @@ function ServerCard({
             <code className="ml-2 rounded bg-background-paper px-1.5 py-0.5 font-mono text-[11px] text-text-primary">zoneploy-agent update</code>
           </div>
 
-          {server.status === 'online' && liveMetrics && (
+          {runtimeAvailable && liveMetrics && (
             <div className="space-y-2">
               <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />

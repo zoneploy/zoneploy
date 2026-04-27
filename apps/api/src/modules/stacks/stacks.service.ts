@@ -274,7 +274,7 @@ async function getStackAndServer(orgId: string, stackId: string) {
     .limit(1)
 
   if (!server) throw new NotFoundError('Servidor no encontrado')
-  if (server.status !== 'online') throw new ForbiddenError('Server is not online')
+  if (server.status !== 'online' && server.agentMode !== 'self_hosted') throw new ForbiddenError('Server is not online')
 
   return { stack, server }
 }
@@ -667,7 +667,7 @@ export async function deployStack(
     .limit(1)
 
   if (!server) throw new NotFoundError('Server no encontrado')
-  if (server.status !== 'online') throw new AppError(409, 'SERVER_UNAVAILABLE', 'Server is not online')
+  if (server.status !== 'online' && server.agentMode !== 'self_hosted') throw new AppError(409, 'SERVER_UNAVAILABLE', 'Server is not online')
   const registryUser = registry?.registryUser
   const registryPassword = registry?.registryPassword
 

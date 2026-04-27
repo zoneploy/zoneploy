@@ -10,6 +10,7 @@ type StackLike = {
 
 type ServerStatusLike = {
   status: string
+  agentMode?: string | null
 }
 
 type StackZoneployEndpointLike = {
@@ -121,7 +122,7 @@ export async function syncStackRuntimeRoutesWithDeps<ServerT extends ServerStatu
   if (!stack?.serverId || stack.deletedAt) return false
 
   const server = await deps.getServer(stack.serverId)
-  if (!server || server.status !== 'online') return false
+  if (!server || (server.status !== 'online' && server.agentMode !== 'self_hosted')) return false
 
   try {
     const domainMappings = await deps.buildRouteMappings(stack, server)

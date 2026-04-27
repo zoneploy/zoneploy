@@ -1,4 +1,4 @@
-import { lt, eq, and, inArray, isNull } from 'drizzle-orm'
+import { lt, eq, ne, and, inArray, isNull } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { servers, containers } from '../db/schema.js'
 
@@ -19,6 +19,7 @@ async function detectOfflineServers() {
     .where(
       and(
         eq(servers.status, 'online'),
+        ne(servers.agentMode, 'self_hosted'),
         isNull(servers.deletedAt),
         lt(servers.lastHeartbeatAt, threshold),
       ),

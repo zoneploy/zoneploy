@@ -20,6 +20,7 @@ import { getRouteSnapshot } from "./routes.js";
 import { runLocalRoute } from "./routes.js";
 import { getAgentStatus } from "./status.js";
 import { handleTerminalUpgrade } from "./terminal.js";
+import { handleMetricsStream, isMetricsStreamPath } from "./metrics.js";
 
 type JsonHandler = (request: http.IncomingMessage) => Promise<unknown> | unknown;
 type JsonRoute = {
@@ -228,6 +229,41 @@ export const startAgentServer = async (): Promise<number> => {
   const server = http.createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+
+      if (isMetricsStreamPath(url.pathname)) {
+        if (!config.agentApiToken) {
+          authNotConfigured(response);
+          return;
+        }
+
+        const token = agentToken(request);
+
+        if (!token || !safeEquals(token, config.agentApiToken)) {
+          unauthorized(response);
+          return;
+        }
+
+        try {
+          await handleMetricsStream(request, response, url);
+        } catch (error) {
+          if (!response.headersSent) {
+            json(response, 500, {
+              error: {
+                code: "INTERNAL_ERROR",
+                message: error instanceof Error ? error.message : "Unexpected error.",
+              },
+            });
+          } else if (!response.writableEnded) {
+            response.write(`event: error\ndata: ${JSON.stringify({
+              message: error instanceof Error ? error.message : "Unexpected error.",
+            })}\n\n`);
+            response.end();
+          }
+        }
+
+        return;
+      }
+
       const route = routeHandlers.get(url.pathname);
 
       if (!route) {

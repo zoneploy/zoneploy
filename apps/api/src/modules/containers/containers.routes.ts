@@ -411,7 +411,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
       .where(eq(servers.id, container.serverId))
       .limit(1)
 
-    if (!server || server.status !== 'online') {
+    if (!server || (server.status !== 'online' && server.agentMode !== 'self_hosted')) {
       return reply.status(503).send({ error: { code: 'UNAVAILABLE', message: 'Servidor no disponible' } })
     }
 

@@ -67,6 +67,25 @@ async function ensureLocalServer(orgId: string) {
       existing.runtimeInfo != null &&
       Object.keys(existing.runtimeInfo as Record<string, unknown>).length > 0
 
+    if (existing.agentMode === 'self_hosted') {
+      if (hasPreflightData && existing.status === 'online') return existing
+
+      const preflight = hasPreflightData ? null : await collectPreflightReport()
+      const [updated] = await db
+        .update(servers)
+        .set({
+          status: 'online',
+          lastHeartbeatAt: new Date(),
+          ...(preflight ? preflightUpdate(preflight) : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(servers.id, existing.id))
+        .returning()
+
+      if (updated) return updated
+      return existing
+    }
+
     if (hasPreflightData) return existing
 
     const preflight = await collectPreflightReport()

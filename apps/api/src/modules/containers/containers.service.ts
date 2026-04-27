@@ -326,7 +326,9 @@ export async function deployContainer(
     .where(and(eq(servers.id, container.serverId), eq(servers.orgId, orgId)))
     .limit(1)
   if (!server) throw new NotFoundError('Server no encontrado')
-  if (server.status !== 'online') throw new AppError(409, 'SERVER_UNAVAILABLE', 'El Server no está en línea')
+  if (server.status !== 'online' && server.agentMode !== 'self_hosted') {
+    throw new AppError(409, 'SERVER_UNAVAILABLE', 'El Server no está en línea')
+  }
   const serverId = server.id
 
   // Load decrypted secrets.
@@ -637,7 +639,9 @@ export async function getContainerForStreaming(orgId: string, containerId: strin
     .limit(1)
 
   if (!server) throw new NotFoundError('Server no encontrado')
-  if (server.status !== 'online') throw new ForbiddenError('El Server no está online')
+  if (server.status !== 'online' && server.agentMode !== 'self_hosted') {
+    throw new ForbiddenError('El Server no está online')
+  }
 
   return { container, server }
 }
@@ -656,7 +660,9 @@ async function getRunningContainerAndServer(orgId: string, containerId: string) 
 
   const [server] = await db.select().from(servers).where(eq(servers.id, container.serverId)).limit(1)
   if (!server) throw new NotFoundError('Server no encontrado')
-  if (server.status !== 'online') throw new ForbiddenError('El Server no está online')
+  if (server.status !== 'online' && server.agentMode !== 'self_hosted') {
+    throw new ForbiddenError('El Server no está online')
+  }
 
   return { container, server }
 }

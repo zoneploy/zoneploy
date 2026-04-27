@@ -158,7 +158,9 @@ export async function serverRuntimeRoutes(app: FastifyInstance) {
         .limit(1)
 
       if (!server) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Server not found' } })
-      if (server.status !== 'online') return reply.status(503).send({ error: { code: 'UNAVAILABLE', message: 'Server is not online' } })
+      if (server.status !== 'online' && server.agentMode !== 'self_hosted') {
+        return reply.status(503).send({ error: { code: 'UNAVAILABLE', message: 'Server is not online' } })
+      }
 
       const agentToken = getAgentAuthToken(server)
 
@@ -182,6 +184,14 @@ export async function serverRuntimeRoutes(app: FastifyInstance) {
           reply.raw.write(`data: ${JSON.stringify({ error: 'Could not connect to the agent' })}\n\n`)
           reply.raw.end()
           return
+        }
+
+        if (server.agentMode === 'self_hosted' && server.status !== 'online') {
+          await db
+            .update(servers)
+            .set({ status: 'online', lastHeartbeatAt: new Date(), updatedAt: new Date() })
+            .where(eq(servers.id, server.id))
+            .catch(() => null)
         }
 
         const reader = agentRes.body.getReader()
@@ -231,7 +241,7 @@ export async function serverRuntimeRoutes(app: FastifyInstance) {
         .where(and(eq(servers.id, serverId), eq(servers.orgId, orgId), isNull(servers.deletedAt)))
         .limit(1)
 
-      if (!server || server.status !== 'online') {
+      if (!server || (server.status !== 'online' && server.agentMode !== 'self_hosted')) {
         socket.close(1011, 'Server not available')
         return
       }
