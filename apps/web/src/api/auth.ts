@@ -2,9 +2,13 @@ import { apiClient } from '@/lib/api-client'
 import type { AuthResponse, AuthSessionResponse, RegisterResponse } from '@zoneploy/types'
 import type { RegisterInput, LoginInput } from '@zoneploy/types'
 
-export type OAuthProvider = 'google' | 'github'
-
 export const authApi = {
+  setupStatus: () =>
+    apiClient.get<{ ownerConfigured: boolean; requiresOwnerSetup: boolean }>('/auth/setup-status'),
+
+  setupOwner: (input: RegisterInput) =>
+    apiClient.post<AuthSessionResponse>('/auth/setup-owner', input),
+
   register: (input: RegisterInput) =>
     apiClient.post<RegisterResponse>('/auth/register', input),
 
@@ -40,10 +44,4 @@ export const authApi = {
 
   resendVerification: (email: string, lang: string) =>
     apiClient.post<{ ok: boolean }>('/auth/resend-verification', { email, lang }),
-
-  oauthAuthorize: (provider: OAuthProvider, state: string) =>
-    apiClient.get<{ authorizationUrl: string }>(`/auth/oauth/${provider}/authorize?state=${encodeURIComponent(state)}`),
-
-  oauthExchange: (provider: OAuthProvider, code: string) =>
-    apiClient.post<AuthResponse>(`/auth/oauth/${provider}/exchange`, { code }),
 }

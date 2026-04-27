@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Eye, EyeOff } from 'lucide-react'
 import { startAuthentication } from '@simplewebauthn/browser'
@@ -54,6 +54,11 @@ export function LoginPage() {
   const [lastSubmittedEmail, setLastSubmittedEmail] = useState(searchParams.get('email') ?? '')
   const [resendFeedback, setResendFeedback] = useState<string | null>(null)
   const prefilledEmail = searchParams.get('email') ?? ''
+  const setupStatus = useQuery({
+    queryKey: ['auth', 'setup-status'],
+    queryFn: authApi.setupStatus,
+    retry: false,
+  })
   const showVerificationPending = searchParams.get('verification') === 'pending' && !!prefilledEmail
   const showVerified = searchParams.get('verified') === '1'
   const blockedEmail = login.error instanceof ApiError && login.error.code === 'EMAIL_NOT_VERIFIED'
@@ -68,6 +73,12 @@ export function LoginPage() {
     resolver: zodResolver(LoginSchema),
     defaultValues: { email: prefilledEmail, password: '' },
   })
+
+  useEffect(() => {
+    if (setupStatus.data?.requiresOwnerSetup) {
+      navigate('/setup', { replace: true })
+    }
+  }, [navigate, setupStatus.data?.requiresOwnerSetup])
 
   const onSubmit = (data: LoginInput) => {
     setLastSubmittedEmail(data.email)
@@ -363,22 +374,11 @@ export function LoginPage() {
           </form>
         </div>
 
-        {/* Divisor inferior */}
         <div className="h-px bg-grey-100" />
 
-        {/* Registro */}
-        <div className="">
-          <h2 className="text-sm font-semibold text-text-primary mb-1">
-            {t('auth.getStartedTitle')}
-          </h2>
-          <p className="text-sm text-text-secondary">
-            {t('auth.noAccount')}{' '}
-            <Link to="/register" className="text-primary hover:underline font-medium">
-              {t('auth.register')}
-            </Link>
-            .
-          </p>
-        </div>
+        <p className="text-sm text-text-secondary">
+          {t('auth.inviteOnlyHint')}
+        </p>
       </div>
     </AuthLayout>
   )

@@ -72,6 +72,28 @@ export function useRegister() {
   })
 }
 
+export function useSetupOwner() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const setSession = useAuthStore(s => s.setSession)
+  const { i18n } = useTranslation()
+
+  return useMutation<AuthResponseSuccess, unknown, Omit<RegisterInput, 'lang'>>({
+    mutationFn: (input: Omit<RegisterInput, 'lang'>) =>
+      authApi.setupOwner({ ...input, lang: i18n.language?.startsWith('en') ? 'en' : 'es' }) as Promise<AuthResponseSuccess>,
+    onSuccess: data => {
+      setSession(data.accessToken, toSessionContext(data))
+      queryClient.clear()
+      queryClient.prefetchQuery({
+        queryKey: ['organizations'],
+        queryFn: organizationsApi.list,
+        staleTime: 5 * 60_000,
+      })
+      navigate(getPostLoginPath(data), { replace: true })
+    },
+  })
+}
+
 export function useLogout() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()

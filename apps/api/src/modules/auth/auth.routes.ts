@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
 import type { AuthResponseMfaRequired, AuthSessionResponse } from '@zoneploy/types'
 import { RegisterSchema, LoginSchema } from '@zoneploy/types'
-import { register, login, loginByUserId, refresh, logout, getMe, verifyEmail, resendVerification, getPendingInvitations, completeMfaWebauthn, completeMfaTotp, listSessions, revokeSession, revokeOtherSessions } from './auth.service.js'
+import { register, setupOwner, getSetupStatus, login, loginByUserId, refresh, logout, getMe, verifyEmail, resendVerification, getPendingInvitations, completeMfaWebauthn, completeMfaTotp, listSessions, revokeSession, revokeOtherSessions } from './auth.service.js'
 import { exchangeOAuthLogin, getOAuthAuthorizationUrl, type OAuthProvider } from './oauth.service.js'
 import { updateProfile, changePassword, setupTotp, verifyAndEnableTotp, disableTotp, getTotpStatus } from './profile.service.js'
 import { requestPasswordReset, verifyResetCode, confirmPasswordReset } from './reset.service.js'
@@ -25,6 +25,8 @@ function parseOAuthProvider(provider: string): OAuthProvider | null {
 
 const defaultDeps = {
   register,
+  setupOwner,
+  getSetupStatus,
   login,
   loginByUserId,
   refresh,
@@ -81,6 +83,30 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
     ...defaultDeps,
     ...(opts.deps ?? {}),
   }
+
+  app.get('/setup-status', async (_request, reply) => {
+    return reply.send(await deps.getSetupStatus())
+  })
+
+  app.post('/setup-owner', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request, reply) => {
+    const input = RegisterSchema.safeParse(request.body)
+    if (!input.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos invÃ¡lidos' },
+      })
+    }
+
+    try {
+      const result = await deps.setupOwner(input.data, getClientCtx(request)) as AuthSessionPayload
+      return replyWithAuthSession(request, reply, result)
+    } catch (err) {
+      if (err instanceof AppError) {
+        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
+      }
+      throw err
+    }
+  })
+
   // POST /auth/register
   app.post('/register', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request, reply) => {
     const input = RegisterSchema.safeParse(request.body)
@@ -122,10 +148,13 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
     }
   })
 
-  app.get('/oauth/:provider/authorize', { config: { rateLimit: { max: 20, timeWindow: '15 minutes' } } }, async (request, reply) => {
-    const { provider: rawProvider } = request.params as { provider: string }
+  app.get('/oauth/:provider/authorize', { config: { rateLimit: { max: 20, timeWindow: '15 minutes' } } }, async (_request, reply) => {
+    const oauthLoginDisabled = true as boolean
+    if (oauthLoginDisabled) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'OAuth login is disabled' } })
+
+    const { provider: rawProvider } = _request.params as { provider: string }
     const provider = parseOAuthProvider(rawProvider)
-    const { state } = (request.query ?? {}) as { state?: string }
+    const { state } = (_request.query ?? {}) as { state?: string }
 
     if (!provider || !state?.trim()) {
       return reply.status(400).send({
@@ -144,10 +173,13 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
     }
   })
 
-  app.post('/oauth/:provider/exchange', { config: { rateLimit: { max: 20, timeWindow: '15 minutes' } } }, async (request, reply) => {
-    const { provider: rawProvider } = request.params as { provider: string }
+  app.post('/oauth/:provider/exchange', { config: { rateLimit: { max: 20, timeWindow: '15 minutes' } } }, async (_request, reply) => {
+    const oauthLoginDisabled = true as boolean
+    if (oauthLoginDisabled) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'OAuth login is disabled' } })
+
+    const { provider: rawProvider } = _request.params as { provider: string }
     const provider = parseOAuthProvider(rawProvider)
-    const { code } = (request.body ?? {}) as { code?: string }
+    const { code } = (_request.body ?? {}) as { code?: string }
 
     if (!provider || !code?.trim()) {
       return reply.status(400).send({
@@ -156,9 +188,9 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
     }
 
     try {
-      const result = await deps.exchangeOAuthLogin(provider, code, getClientCtx(request))
+      const result = await deps.exchangeOAuthLogin(provider, code, getClientCtx(_request))
       if (!hasRefreshToken(result)) return reply.send(result)
-      return replyWithAuthSession(request, reply, result)
+      return replyWithAuthSession(_request, reply, result)
     } catch (err) {
       if (err instanceof AppError) {
         return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })

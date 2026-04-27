@@ -219,7 +219,7 @@ const spawnHostShell = (target: Extract<TerminalTarget, { kind: "server" }>): IP
     name: "xterm-256color",
     cols,
     rows,
-    cwd: process.cwd(),
+    cwd: process.env.HOME || "/root",
     env: {
       ...process.env,
       TERM: "xterm-256color",

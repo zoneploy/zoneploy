@@ -29,8 +29,7 @@ function DashboardRoute() {
   return hasOrg ? <Navigate to="/projects" replace /> : <DashboardPage />
 }
 import { LoginPage } from '@/pages/auth/LoginPage'
-import { OAuthCallbackPage } from '@/pages/auth/OAuthCallbackPage'
-import { RegisterPage } from '@/pages/auth/RegisterPage'
+import { SetupOwnerPage } from '@/pages/auth/SetupOwnerPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
 import { TermsPage } from '@/pages/legal/TermsPage'
@@ -64,14 +63,13 @@ export const router = createBrowserRouter([
     element: <GuestRoute />,
     children: [
       { path: '/login',           element: <LoginPage /> },
-      { path: '/register',        element: <RegisterPage /> },
+      { path: '/setup',           element: <SetupOwnerPage /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
     ],
   },
 
   // Public routes, always accessible.
   { path: '/verify-email',  element: <VerifyEmailPage /> },
-  { path: '/auth/:provider/callback', element: <OAuthCallbackPage /> },
   { path: '/invite/:token', element: <AcceptInvitationPage /> },
   { path: '/terms',         element: <TermsPage /> },
   { path: '/privacy',       element: <PrivacyPage /> },

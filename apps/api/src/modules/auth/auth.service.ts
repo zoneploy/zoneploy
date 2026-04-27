@@ -14,7 +14,7 @@ import {
   passkeys,
 } from '../../db/schema.js'
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt.js'
-import { AppError, ConflictError, NotFoundError, UnauthorizedError, InvalidCredentialsError, BadRequestError } from '../../lib/errors.js'
+import { AppError, ConflictError, NotFoundError, UnauthorizedError, InvalidCredentialsError, BadRequestError, ForbiddenError } from '../../lib/errors.js'
 import { sendMail, verificationEmail } from '../../lib/mailer.js'
 import { config } from '../../config.js'
 import type { RegisterInput, LoginInput } from '@zoneploy/types'
@@ -95,7 +95,95 @@ function ensureEmailVerified(emailVerified: boolean) {
 
 // Services
 
+async function ownerConfigured() {
+  const [owner] = await db
+    .select({ id: orgMembers.id })
+    .from(orgMembers)
+    .where(eq(orgMembers.role, 'owner'))
+    .limit(1)
+
+  return Boolean(owner)
+}
+
+async function hasPendingInvitation(email: string) {
+  const [invitation] = await db
+    .select({ id: orgInvitations.id })
+    .from(orgInvitations)
+    .where(
+      and(
+        eq(orgInvitations.email, email),
+        eq(orgInvitations.status, 'pending'),
+        gte(orgInvitations.expiresAt, new Date()),
+      ),
+    )
+    .limit(1)
+
+  return Boolean(invitation)
+}
+
+async function createUserAccount(input: RegisterInput, emailVerified: boolean) {
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, input.email))
+    .limit(1)
+
+  if (existing) {
+    throw new ConflictError('El email ya estÃ¡ registrado')
+  }
+
+  const passwordHash = await bcrypt.hash(input.password, 12)
+
+  const [user] = await db
+    .insert(users)
+    .values({
+      email: input.email,
+      passwordHash,
+      fullName: input.fullName,
+      emailVerified,
+    })
+    .returning()
+
+  if (!user) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear usuario')
+
+  createNotification({
+    userId: user.id,
+    type: 'welcome',
+    data: { name: user.fullName, lang: input.lang ?? 'es' },
+    link: '/notifications',
+  }).catch(err => console.error('Error creando notificaciÃ³n de bienvenida:', err))
+
+  return user
+}
+
+export async function getSetupStatus() {
+  const configured = await ownerConfigured()
+  return {
+    ownerConfigured: configured,
+    requiresOwnerSetup: !configured,
+  }
+}
+
+export async function setupOwner(input: RegisterInput, ctx?: SessionContext) {
+  if (await ownerConfigured()) {
+    throw new ConflictError('La instancia ya tiene un owner configurado', 'OWNER_ALREADY_CONFIGURED')
+  }
+
+  const user = await createUserAccount(input, true)
+  await createOrg(user.id, 'Zoneploy Workspace')
+
+  return login({ email: input.email, password: input.password }, ctx)
+}
+
 export async function register(input: RegisterInput) {
+  if (!await ownerConfigured()) {
+    throw new BadRequestError('Primero configurÃ¡ el owner de esta instancia self-hosted', 'OWNER_SETUP_REQUIRED')
+  }
+
+  if (!await hasPendingInvitation(input.email)) {
+    throw new ForbiddenError('El registro pÃºblico estÃ¡ deshabilitado. PedÃ­ una invitaciÃ³n al owner.', 'REGISTRATION_DISABLED')
+  }
+
   // 1. Verificar que el email no exista
   const [existing] = await db
     .select({ id: users.id })

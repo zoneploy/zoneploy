@@ -34,6 +34,8 @@ let refreshPromise: Promise<string | null> | null = null
 function canAttemptRefresh(path: string): boolean {
   if (path === '/auth/login') return false
   if (path === '/auth/register') return false
+  if (path === '/auth/setup-status') return false
+  if (path === '/auth/setup-owner') return false
   if (path === '/auth/refresh') return false
   if (path === '/auth/session') return false
   if (path === '/auth/logout') return false
