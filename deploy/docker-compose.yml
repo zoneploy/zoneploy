@@ -133,3 +133,4 @@ services:
 networks:
   zoneploy:
     name: zoneploy
+    external: true
