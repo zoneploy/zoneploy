@@ -371,6 +371,7 @@
     "provisioningError": "Error during provisioning",
     "viewProvisionLogs": "View install logs",
     "provisionLogsTitle": "Install logs",
+    "provisionLogsEmpty": "No install logs are stored for this server.",
     "reprovision": "Reinstall agent",
     "reprovisionTitle": "Reinstall Worker Agent",
     "reprovisionBtn": "Reinstall",

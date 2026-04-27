@@ -1,7 +1,7 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type http from "node:http";
 import type { Duplex } from "node:stream";
+import { spawn as spawnPty, type IPty } from "@homebridge/node-pty-prebuilt-multiarch";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { findDeploymentByReference, findStackServiceContainer } from "@zoneploy/runtime";
 
@@ -16,6 +16,8 @@ type TerminalTarget =
 
 const wss = new WebSocketServer({ noServer: true });
 const tokenTtlMs = 5 * 60 * 1000;
+const defaultCols = 80;
+const defaultRows = 24;
 
 const httpUpgradeError = (socket: Duplex, statusCode: number, message: string): void => {
   socket.write(`HTTP/1.1 ${statusCode} ${message}\r\nConnection: close\r\n\r\n`);
@@ -129,92 +131,110 @@ const resolveStackServiceReference = async (projectName: string, serviceName: st
   return service.containerName;
 };
 
-const isResizeMessage = (data: RawData): boolean => {
+const readDimension = (value: string | number | undefined, fallback: number): number => {
+  const number = typeof value === "number" ? value : Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+
+  return Math.max(2, Math.min(500, number));
+};
+
+const readResizeMessage = (data: RawData): { cols: number; rows: number } | null => {
   if (typeof data !== "string" && !Buffer.isBuffer(data)) {
-    return false;
+    return null;
   }
 
   const text = Buffer.isBuffer(data) ? data.toString("utf8") : data;
   if (!text.startsWith("{")) {
-    return false;
+    return null;
   }
 
   try {
-    const message = JSON.parse(text) as { type?: string };
-    return message.type === "resize";
+    const message = JSON.parse(text) as { type?: string; cols?: number; rows?: number };
+    if (message.type !== "resize") {
+      return null;
+    }
+
+    return {
+      cols: readDimension(message.cols, defaultCols),
+      rows: readDimension(message.rows, defaultRows),
+    };
   } catch {
-    return false;
+    return null;
   }
 };
 
-const rawDataToBuffer = (data: RawData): Buffer => {
+const rawDataToString = (data: RawData): string => {
   if (Buffer.isBuffer(data)) {
-    return data;
+    return data.toString("utf8");
   }
 
   if (typeof data === "string") {
-    return Buffer.from(data);
+    return data;
   }
 
   if (data instanceof ArrayBuffer) {
-    return Buffer.from(data);
+    return Buffer.from(data).toString("utf8");
   }
 
-  return Buffer.concat(data);
+  return Buffer.concat(data).toString("utf8");
 };
 
-const attachProcess = (ws: WebSocket, child: ChildProcessWithoutNullStreams): void => {
-  const send = (data: Buffer): void => {
+const attachProcess = (ws: WebSocket, terminal: IPty): void => {
+  const output = terminal.onData((data) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(data);
     }
-  };
-
-  child.stdout.on("data", send);
-  child.stderr.on("data", send);
-  child.on("error", (error) => {
-    send(Buffer.from(`\r\n${error.message}\r\n`));
-    ws.close(1011, "Terminal process failed");
   });
-  child.on("close", () => {
+  const exit = terminal.onExit(() => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.close();
     }
   });
 
   ws.on("message", (data) => {
-    if (isResizeMessage(data)) {
+    const size = readResizeMessage(data);
+    if (size) {
+      terminal.resize(size.cols, size.rows);
       return;
     }
 
-    child.stdin.write(rawDataToBuffer(data));
+    terminal.write(rawDataToString(data));
   });
 
   ws.on("close", () => {
-    child.kill("SIGTERM");
+    output.dispose();
+    exit.dispose();
+    terminal.kill();
   });
 };
 
-const spawnHostShell = (target: Extract<TerminalTarget, { kind: "server" }>): ChildProcessWithoutNullStreams => {
+const spawnHostShell = (target: Extract<TerminalTarget, { kind: "server" }>): IPty => {
   const shell = process.env.SHELL || "/bin/sh";
+  const cols = readDimension(target.cols, defaultCols);
+  const rows = readDimension(target.rows, defaultRows);
 
-  return spawn(shell, ["-i"], {
+  return spawnPty(shell, ["-i"], {
+    name: "xterm-256color",
+    cols,
+    rows,
+    cwd: process.cwd(),
     env: {
       ...process.env,
       TERM: "xterm-256color",
-      COLUMNS: target.cols ?? "80",
-      LINES: target.rows ?? "24",
+      COLUMNS: String(cols),
+      LINES: String(rows),
     },
-    stdio: "pipe",
   });
 };
 
-const spawnContainerShell = (containerName: string): ChildProcessWithoutNullStreams => {
-  return spawn(
+const spawnContainerShell = (containerName: string): IPty => {
+  return spawnPty(
     "docker",
     [
       "exec",
-      "-i",
+      "-it",
       "-e",
       "TERM=xterm-256color",
       containerName,
@@ -223,12 +243,16 @@ const spawnContainerShell = (containerName: string): ChildProcessWithoutNullStre
       "if command -v bash >/dev/null 2>&1; then exec bash -i; else exec sh -i; fi",
     ],
     {
-      stdio: "pipe",
+      name: "xterm-256color",
+      cols: defaultCols,
+      rows: defaultRows,
+      cwd: process.cwd(),
+      env: process.env,
     },
   );
 };
 
-const openTerminal = async (target: TerminalTarget): Promise<ChildProcessWithoutNullStreams> => {
+const openTerminal = async (target: TerminalTarget): Promise<IPty> => {
   if (target.kind === "server") {
     return spawnHostShell(target);
   }

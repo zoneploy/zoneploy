@@ -123,8 +123,17 @@ function ProvisionLogStream({
     <div className="h-64 overflow-y-auto rounded-lg bg-[#0a0f14] p-3 space-y-1.5">
       {entries.length === 0 ? (
         <div className="flex items-center gap-2 text-xs font-mono text-text-secondary">
-          <Loader size={12} className="animate-spin" />
-          <span>{t('common.loading')}</span>
+          {done ? (
+            <>
+              <ScrollText size={12} />
+              <span>{t('servers.provisionLogsEmpty')}</span>
+            </>
+          ) : (
+            <>
+              <Loader size={12} className="animate-spin" />
+              <span>{t('common.loading')}</span>
+            </>
+          )}
         </div>
       ) : (
         entries.map((entry, index) => (
@@ -318,6 +327,9 @@ function AgentAuditModal({
     queryKey: ['servers', orgId, server.id, 'agent-audit'],
     queryFn: () => serversApi.audit(orgId, server.id),
   })
+  const osLabel = data
+    ? data.os?.distroId ?? data.os?.platform ?? server.runtimeInfo.distroId ?? server.runtimeInfo.platform ?? 'unknown'
+    : 'unknown'
 
   return (
     <Dialog
@@ -351,7 +363,7 @@ function AgentAuditModal({
                 <p className="mt-1 text-xs text-text-secondary">
                   {t('servers.audit.meta', {
                     version: data.agentVersion,
-                    os: data.os.distroId ?? data.os.platform,
+                    os: osLabel,
                     generatedAt: new Date(data.generatedAt).toLocaleString(),
                   })}
                 </p>

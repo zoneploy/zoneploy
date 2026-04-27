@@ -371,6 +371,7 @@
     "provisioningError": "Error durante el aprovisionamiento",
     "viewProvisionLogs": "Ver logs de instalación",
     "provisionLogsTitle": "Logs de instalación",
+    "provisionLogsEmpty": "No hay logs de instalación guardados para este servidor.",
     "reprovision": "Reinstalar agente",
     "reprovisionTitle": "Reinstalar Worker Agent",
     "reprovisionBtn": "Reinstalar",

@@ -47,7 +47,7 @@ export interface AgentAuditReport {
   generatedAt: string
   hostname: string
   agentVersion: string
-  os: {
+  os?: {
     platform: string
     distroId: string | null
     distroLike: string[]

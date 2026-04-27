@@ -6,7 +6,6 @@ import {
   cleanupLocalRuntime,
   clearLocalDeploymentRoutes,
   clearLocalStackRoutes,
-  collectAuditReport,
   collectPreflightReport,
   createAgentStatus,
   createDeploymentSnapshot,
@@ -360,7 +359,7 @@ export const workerClient = {
     }
   },
 
-  audit: async (_server: Server) => collectAuditReport({ agentVersion: 'local' }),
+  audit: (server: Server) => agentRequest<AgentAuditReport>(server, 'GET', '/audit'),
 
   dockerCleanup: async (_server: Server, options: AgentDockerCleanupOptions) => {
     const result = await cleanupLocalRuntime(options.dryRun !== false)

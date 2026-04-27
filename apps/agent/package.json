@@ -14,9 +14,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@zoneploy/types": "workspace:*",
-    "@zoneploy/runtime": "workspace:*",
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
     "@zoneploy/addons": "workspace:*",
+    "@zoneploy/runtime": "workspace:*",
+    "@zoneploy/types": "workspace:*",
     "ws": "^8.20.0"
   },
   "devDependencies": {
