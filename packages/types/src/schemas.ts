@@ -24,7 +24,6 @@ export const CreateOrgSchema = z.object({
 export const UpdateOrgSchema = z.object({
   name: z.string().min(2).max(80).optional(),
   require2fa: z.boolean().optional(),
-  billingCountry: z.enum(['AR', 'US']).nullable().optional(),
 })
 
 // Project

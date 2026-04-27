@@ -2,12 +2,12 @@ import { eq, and, inArray } from 'drizzle-orm'
 import { db } from '../../db/client.js'
 import { customRoles, rolePermissions, orgMembers, orgInvitations } from '../../db/schema.js'
 import { NotFoundError, ConflictError, ForbiddenError, AppError } from '../../lib/errors.js'
-import { OWNER_ONLY_PERMISSIONS, type Permission } from '@zoneploy/types'
+import type { Permission } from '@zoneploy/types'
 
-const OWNER_ONLY_PERMISSION_SET = new Set<Permission>(OWNER_ONLY_PERMISSIONS)
+const LEGACY_BLOCKED_PERMISSIONS = new Set<string>(['billing:read', 'billing:manage'])
 
 function filterAssignablePermissions(permissions: Permission[]) {
-  return permissions.filter(permission => !OWNER_ONLY_PERMISSION_SET.has(permission))
+  return permissions.filter(permission => !LEGACY_BLOCKED_PERMISSIONS.has(permission))
 }
 
 function formatRole(

@@ -762,7 +762,6 @@ export const NOTIFICATION_TYPES = [
   'member_joined',
   'member_invited',
   'addon_expiring',
-  'billing_warning',
 ] as const
 
 export type NotificationType = typeof NOTIFICATION_TYPES[number]

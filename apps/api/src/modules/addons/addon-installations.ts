@@ -1,8 +1,7 @@
 import { and, count, eq, isNull } from 'drizzle-orm'
 import { db } from '../../db/client.js'
-import { addOnBindings, addOns, planAddOns, serverAddOnInstallations } from '../../db/schema.js'
+import { addOnBindings, addOns, serverAddOnInstallations } from '../../db/schema.js'
 import { NotFoundError, ValidationError } from '../../lib/errors.js'
-import { assertInstalledAddOnLimit } from '../../lib/plan-limits.js'
 import { workerClient } from '../../lib/worker-client.js'
 import {
   assertAddonRequirementsCompatible,
@@ -13,7 +12,6 @@ import {
   buildServerAddonUninstallPlan,
   ensureAddonAvailableForPlan,
   ensureServerOwned,
-  getActiveSubscription,
   getAddonDefinition,
   getInstallationRow,
   normalizeAddonRequirements,
@@ -27,8 +25,7 @@ import {
 } from './addon-shared.js'
 
 export async function getOrgAddons(orgId: string) {
-  const sub = await getActiveSubscription(orgId)
-  const conditions = [eq(planAddOns.planId, sub.planId), eq(addOns.isActive, true)]
+  void orgId
 
   const available = await db
     .select({
@@ -45,15 +42,14 @@ export async function getOrgAddons(orgId: string) {
       managedComponents: addOns.managedComponents,
       uiMetadata: addOns.uiMetadata,
       isActive: addOns.isActive,
-      limits: planAddOns.limits,
     })
-    .from(planAddOns)
-    .innerJoin(addOns, eq(planAddOns.addOnId, addOns.id))
-    .where(and(...conditions))
+    .from(addOns)
+    .where(eq(addOns.isActive, true))
     .orderBy(addOns.category, addOns.name)
 
   return available.map(row => ({
     ...row,
+    limits: {},
     bindingScopes: normalizeBindingScopes(row.bindingScopes),
     requirements: normalizeAddonRequirements(row.requirements),
   }))
@@ -191,8 +187,6 @@ export async function installServerAddon(orgId: string, serverId: string, addonI
   )
 
   if (existing) {
-    await assertInstalledAddOnLimit(orgId)
-
     const [reactivated] = await db
       .update(serverAddOnInstallations)
       .set({
@@ -218,8 +212,6 @@ export async function installServerAddon(orgId: string, serverId: string, addonI
 
     return reactivated
   }
-
-  await assertInstalledAddOnLimit(orgId)
 
   const [installation] = await db
     .insert(serverAddOnInstallations)

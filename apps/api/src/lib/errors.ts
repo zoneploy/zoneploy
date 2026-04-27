@@ -50,9 +50,3 @@ export class BadRequestError extends AppError {
     super(400, code, message)
   }
 }
-
-export class PlanLimitError extends AppError {
-  constructor(message: string, code = 'PLAN_LIMIT_EXCEEDED') {
-    super(403, code, message)
-  }
-}

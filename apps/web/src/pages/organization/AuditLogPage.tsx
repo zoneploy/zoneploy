@@ -13,7 +13,6 @@ import {
 import { EmptyState } from '@/components/ui/empty-state'
 import { useAuthStore } from '@/stores/auth'
 import { auditApi, type AuditQuery } from '@/api/audit'
-import { organizationsApi } from '@/api/organizations'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { LoadingState } from '@/components/ui/spinner'
@@ -257,18 +256,10 @@ export function AuditLogPage() {
 
   const query: AuditQuery = { page, limit: PAGE_LIMIT, ...filters }
 
-  const { data: org, isLoading: loadingOrg } = useQuery({
-    queryKey: ['organization', orgId],
-    queryFn: () => organizationsApi.get(orgId),
-    enabled: !!orgId,
-  })
-  const isFreePlan = org?.subscription?.planSlug === 'free'
-  const planKnown = !!org?.subscription
-
   const { data, isLoading, isError } = useQuery({
     queryKey: ['audit', orgId, query],
     queryFn: () => auditApi.list(orgId, query),
-    enabled: !!orgId && planKnown && !isFreePlan,
+    enabled: !!orgId,
   })
 
   const logs = data?.data ?? []
@@ -390,10 +381,8 @@ export function AuditLogPage() {
       </div>
 
       {/* Content. */}
-      {loadingOrg || isLoading ? (
+      {isLoading ? (
         <LoadingState />
-      ) : isFreePlan ? (
-        <EmptyState icon={ClipboardList} title={t('audit.paidPlanOnlyTitle')} subtitle={t('audit.paidPlanOnlySubtitle')} />
       ) : isError ? (
         <div className="py-12 text-center text-sm text-red-400">{t('common.error')}</div>
       ) : logs.length === 0 ? (

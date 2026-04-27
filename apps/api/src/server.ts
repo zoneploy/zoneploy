@@ -26,7 +26,6 @@ import { serverRoutes } from './modules/servers/servers.routes.js'
 import { containerRoutes } from './modules/containers/containers.routes.js'
 import { secretRoutes } from './modules/secrets/secrets.routes.js'
 import { domainRoutes } from './modules/domains/domains.routes.js'
-import { planRoutes, subscriptionRoutes } from './modules/plans/plans.routes.js'
 import {
   orgAddonRoutes,
   serverAddonRoutes,
@@ -195,8 +194,6 @@ await server.register(orgAddonRoutes, { prefix: '/api/v1/organizations/:orgId/ad
 await server.register(serverAddonRoutes, { prefix: '/api/v1/organizations/:orgId/servers/:serverId/addons' })
 await server.register(containerAddonBindingRoutes, { prefix: '/api/v1/organizations/:orgId/containers/:containerId/addons' })
 await server.register(stackAddonBindingRoutes, { prefix: '/api/v1/organizations/:orgId/stacks/:stackId/addons' })
-await server.register(planRoutes, { prefix: '/api/v1/plans' })
-await server.register(subscriptionRoutes, { prefix: '/api/v1/organizations/:orgId/subscription' })
 await server.register(notificationRoutes, { prefix: '/api/v1/notifications' })
 
 server.post('/api/v1/deploy/plan', async (request, reply) => {

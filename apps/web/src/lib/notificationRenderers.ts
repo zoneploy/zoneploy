@@ -1,6 +1,6 @@
 import {
   Zap, Server, Rocket, Users, Mail,
-  CreditCard, AlertTriangle, CheckCircle2, XCircle, Building2,
+  AlertTriangle, CheckCircle2, XCircle, Building2,
 } from 'lucide-react'
 import type { TFunction } from 'i18next'
 import type { NotificationType } from '@/api/notificationTypes'
@@ -106,13 +106,6 @@ const RENDERERS: Record<NotificationType, Renderer> = {
     icon: AlertTriangle,
     iconColor: 'text-warning',
     iconBg: 'bg-warning/10',
-  }),
-  billing_warning: (data, t) => ({
-    title: t('notifications.types.billing_warning.title'),
-    body: t('notifications.types.billing_warning.body', { detail: data.detail }),
-    icon: CreditCard,
-    iconColor: 'text-error',
-    iconBg: 'bg-error/10',
   }),
 }
 

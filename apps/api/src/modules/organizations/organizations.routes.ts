@@ -95,12 +95,6 @@ export async function organizationRoutes(app: FastifyInstance) {
           error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' },
         })
       }
-      if (input.data.billingCountry !== undefined && request.orgMemberRole !== 'owner') {
-        return reply.status(403).send({
-          error: { code: 'FORBIDDEN', message: 'Only the organization owner can update billing settings' },
-        })
-      }
-
       try {
         const result = await updateOrg(orgId, input.data)
 
@@ -127,19 +121,6 @@ export async function organizationRoutes(app: FastifyInstance) {
             resourceId: orgId,
             resourceName: result.name,
             metadata: { require2fa: input.data.require2fa },
-            ipAddress: request.ip,
-          })
-        }
-
-        if (input.data.billingCountry !== undefined) {
-          await audit({
-            orgId,
-            actor: { id: request.userId, email: request.userEmail, name: request.userName },
-            action: 'org.updated',
-            resourceType: 'organization',
-            resourceId: orgId,
-            resourceName: result.name,
-            metadata: { billingCountry: input.data.billingCountry },
             ipAddress: request.ip,
           })
         }

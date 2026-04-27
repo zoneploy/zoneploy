@@ -8,10 +8,6 @@ import {
   NotFoundError,
 } from '../../lib/errors.js'
 import {
-  assertCustomDomainLimit,
-  assertSubdomainLimit,
-} from '../../lib/plan-limits.js'
-import {
   CUSTOM_DOMAINS_EDGE_SLUG,
   resolveCustomDomainRoutingForOwner,
 } from '../../lib/custom-domain-routing.js'
@@ -315,7 +311,6 @@ export async function listDomains(orgId: string, containerId: string) {
 }
 
 export async function addZoneployEndpoint(orgId: string, containerId: string, port: number) {
-  await assertSubdomainLimit(orgId)
   await getContainerRow(orgId, containerId)
   const counts = await getContainerEndpointCounts(containerId)
   return addContainerZoneployEndpointWithDeps(containerId, generateZoneploySlug(), counts.total, port, {
@@ -433,7 +428,6 @@ export async function addCustomEndpoint(
   input: { port: number; customDomain: string },
 ) {
   const routing = await resolveCustomDomainRoutingForOwner('container', containerId)
-  await assertCustomDomainLimit(orgId)
   await getContainerRow(orgId, containerId)
   const counts = await getContainerEndpointCounts(containerId)
   return addContainerCustomEndpointWithDeps(containerId, counts.total, input, routing, {

@@ -9,14 +9,12 @@ import {
   type StackDomainsResponse,
   type StackZoneployEndpointInfo,
 } from '@/api/stacks'
-import { plansApi } from '@/api/plans'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { LoadingState } from '@/components/ui/spinner'
 import { getApiError } from '@/lib/errors'
-import { hasReachedPlanLimit } from '@/lib/plan-limits'
 import {
   DnsRecordCard,
   ServiceMeta,
@@ -327,16 +325,8 @@ export function StackDomainsTab({
     queryFn: () => stacksApi.listDomains(orgId, stackId),
   })
 
-  const { data: subscription } = useQuery({
-    queryKey: ['subscription', orgId],
-    queryFn: () => plansApi.getSubscription(orgId),
-    enabled: !!orgId,
-    staleTime: 30_000,
-  })
-
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['stack-domains', stackId] })
-    queryClient.invalidateQueries({ queryKey: ['subscription', orgId] })
   }
 
   const addZoneploy = useMutation({
@@ -375,10 +365,7 @@ export function StackDomainsTab({
   const customDomainsReady = endpoints.customRouting.enabled
   const openAddons = () => navigate(endpoints.customRouting.serverId ? `/addons?serverId=${endpoints.customRouting.serverId}` : '/addons')
   const connectedDomains = [...endpoints.zoneploy, ...endpoints.custom]
-  const usedSubdomains = Math.max(subscription?.usage.subdomains ?? 0, endpoints.zoneploy.length)
-  const zoneployLimitReached = hasReachedPlanLimit(usedSubdomains, subscription?.maxSubdomains)
   const addDisabled = !isValidPort(newPort)
-    || (domainType === 'zoneploy' && zoneployLimitReached)
     || (domainType === 'custom' && (!isValidHostname(newHostname.trim()) || !customDomainsReady))
   const addError = domainType === 'zoneploy' ? addZoneploy.error : addCustom.error
 
@@ -450,13 +437,6 @@ export function StackDomainsTab({
                 </Button>
               </div>
             )}
-          </div>
-        )}
-        {domainType === 'zoneploy' && zoneployLimitReached && subscription && (
-          <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3">
-            <p className="text-sm font-medium text-amber-300">
-              {t('domains.zoneployPlanLimitReached', { used: usedSubdomains, max: subscription.maxSubdomains })}
-            </p>
           </div>
         )}
         {addError && <p className="text-xs text-red-400">{getApiError(addError, t)}</p>}

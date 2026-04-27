@@ -5,7 +5,6 @@ import { authorize } from '../../plugins/authorize.js'
 import { AppError } from '../../lib/errors.js'
 import { createInvitation, getInvitation, acceptInvitation, declineInvitation, revokeInvitation, listInvitations } from './invitations.service.js'
 import { audit } from '../../lib/audit.js'
-import { assertPaidPlanFeature } from '../../lib/plan-limits.js'
 
 export async function invitationRoutes(app: FastifyInstance) {
 
@@ -34,10 +33,6 @@ export async function invitationRoutes(app: FastifyInstance) {
         },
       })
     }
-    if (input.data.role === 'custom') {
-      await assertPaidPlanFeature(orgId, 'custom_roles')
-    }
-
     try {
       const invitation = await createInvitation(orgId, request.userId, input.data as any)
 

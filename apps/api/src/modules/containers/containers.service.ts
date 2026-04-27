@@ -22,7 +22,6 @@ import { generateDeployToken, hashDeployToken } from '../../lib/deploy-token.js'
 import { getEnvSecretsDecrypted } from '../environments/environments.service.js'
 import type { CreateContainerInput, UpdateContainerInput } from '@zoneploy/types'
 import type { GitBuildSource } from '../../lib/worker-client.js'
-import { assertDeploymentLimit } from '../../lib/plan-limits.js'
 import {
   getPreferredPublicHost,
   getZoneployFullDomain,
@@ -165,8 +164,6 @@ export async function getContainer(orgId: string, containerId: string) {
 }
 
 export async function createContainer(orgId: string, input: CreateContainerInput) {
-  await assertDeploymentLimit(orgId)
-
   const slug = generateSlug(input.name)
 
   // Auto-generate deploy token on creation; shown to the user only once.

@@ -1,4 +1,4 @@
-import { eq, and, inArray, ne, isNull } from 'drizzle-orm'
+import { eq, and, ne, isNull } from 'drizzle-orm'
 import { collectPreflightReport } from '@zoneploy/runtime'
 import { db } from '../../db/client.js'
 import {
@@ -8,12 +8,10 @@ import {
   environments,
   organizations,
   orgMembers,
-  plans,
   projects,
   serverAddOnInstallations,
   servers,
   stacks,
-  subscriptions,
   zoneployPublicEndpoints,
 } from '../../db/schema.js'
 import { NotFoundError, ForbiddenError, ConflictError, AppError } from '../../lib/errors.js'
@@ -25,8 +23,6 @@ import { getZoneployFullDomain } from '../../lib/public-endpoints.js'
 import { encrypt } from '../../lib/crypto.js'
 import type { OrgRole } from '@zoneploy/types'
 
-const ENTITLED_SUBSCRIPTION_STATUSES: Array<'active' | 'trialing' | 'past_due'> = ['active', 'trialing', 'past_due']
-
 // Formatting helpers
 
 function formatOrg(o: typeof organizations.$inferSelect) {
@@ -35,7 +31,6 @@ function formatOrg(o: typeof organizations.$inferSelect) {
     name: o.name,
     slug: o.slug,
     ownerId: o.ownerId,
-    billingCountry: o.billingCountry,
     logoUrl: o.logoUrl,
     require2fa: o.require2fa,
     status: o.status,
@@ -73,23 +68,8 @@ export async function createOrg(userId: string, name: string) {
     role: 'owner',
   })
 
-  // Free subscription.
-  const [freePlan] = await db
-    .select()
-    .from(plans)
-    .where(eq(plans.slug, 'free'))
-    .limit(1)
-
-  if (!freePlan) throw new AppError(500, 'SEED_REQUIRED', 'Plan Free no encontrado. Ejecutá: pnpm db:seed')
 
   const now = new Date()
-
-  await db.insert(subscriptions).values({
-    orgId: org.id,
-    planId: freePlan.id,
-    currentPeriodStart: now,
-    currentPeriodEnd: new Date('2099-12-31'),
-  })
 
   const localToken = encrypt(`local-${org.id}`)
   const preflight = await collectPreflightReport()
@@ -154,24 +134,6 @@ export async function getOrg(orgId: string, userId: string) {
 
   if (!org) throw new NotFoundError('Organización no encontrada')
 
-  const [sub] = await db
-    .select({
-      id: subscriptions.id,
-      status: subscriptions.status,
-      currentPeriodEnd: subscriptions.currentPeriodEnd,
-      planName: plans.name,
-      planSlug: plans.slug,
-      planMaxServers: plans.maxServers,
-      planMaxDeployments: plans.maxDeployments,
-      planMaxSubdomains: plans.maxSubdomains,
-      planMaxCustomDomains: plans.maxCustomDomains,
-      planMaxInstalledAddOns: plans.maxInstalledAddOns,
-    })
-    .from(subscriptions)
-    .innerJoin(plans, eq(subscriptions.planId, plans.id))
-    .where(and(eq(subscriptions.orgId, orgId), inArray(subscriptions.status, ENTITLED_SUBSCRIPTION_STATUSES)))
-    .limit(1)
-
   const permissions = await resolvePermissions(member.role as OrgRole, member.customRoleId)
 
   return {
@@ -179,25 +141,18 @@ export async function getOrg(orgId: string, userId: string) {
     role: member.role,
     customRoleId: member.customRoleId,
     permissions,
-    subscription: sub
-      ? {
-          ...sub,
-          currentPeriodEnd: sub.currentPeriodEnd.toISOString(),
-        }
-      : null,
   }
 }
 
 export async function updateOrg(
   orgId: string,
-  data: { name?: string; require2fa?: boolean; billingCountry?: 'AR' | 'US' | null },
+  data: { name?: string; require2fa?: boolean },
 ) {
   const [org] = await db
     .update(organizations)
     .set({
       ...(data.name !== undefined ? { name: data.name } : {}),
       ...(data.require2fa !== undefined ? { require2fa: data.require2fa } : {}),
-      ...(data.billingCountry !== undefined ? { billingCountry: data.billingCountry } : {}),
       updatedAt: new Date(),
     })
     .where(and(eq(organizations.id, orgId), eq(organizations.status, 'active'), isNull(organizations.deletedAt)))
@@ -323,10 +278,6 @@ export async function deleteOrg(orgId: string, userId: string) {
         .update(projects)
         .set({ deletedAt: now, updatedAt: now })
         .where(and(eq(projects.orgId, orgId), isNull(projects.deletedAt))),
-      tx
-        .update(subscriptions)
-        .set({ status: 'canceled', canceledAt: now, updatedAt: now })
-        .where(and(eq(subscriptions.orgId, orgId), inArray(subscriptions.status, ENTITLED_SUBSCRIPTION_STATUSES))),
       tx
         .update(organizations)
         .set({ status: 'deleted', deletedAt: now, updatedAt: now })

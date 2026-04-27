@@ -12,12 +12,10 @@ import { Dialog } from '@/components/ui/dialog'
 import { Select } from '@/components/ui/select'
 import { LoadingState } from '@/components/ui/spinner'
 import { addonsApi, type OrgAddon, type ServerAddonInstallation } from '@/api/addons'
-import { plansApi } from '@/api/plans'
 import { serversApi, type ServerItem } from '@/api/servers'
 import { useAuthStore } from '@/stores/auth'
 import { usePermissions } from '@/hooks/usePermissions'
 import { getApiError } from '@/lib/errors'
-import { hasReachedPlanLimit } from '@/lib/plan-limits'
 
 function addonText(t: (key: string, options?: Record<string, unknown>) => string, addon: Pick<OrgAddon, 'slug' | 'name' | 'description'>) {
   return {
@@ -122,7 +120,6 @@ function AddonCard({
   serverId,
   orgId,
   canManage,
-  installLimitReached,
   onManage,
 }: {
   addon: OrgAddon
@@ -131,7 +128,6 @@ function AddonCard({
   serverId: string
   orgId: string
   canManage: boolean
-  installLimitReached: boolean
   onManage?: () => void
 }) {
   const { t } = useTranslation()
@@ -152,7 +148,6 @@ function AddonCard({
     onSuccess: () => {
       setConfirmAction(null)
       queryClient.invalidateQueries({ queryKey: ['server-addons', orgId, serverId] })
-      queryClient.invalidateQueries({ queryKey: ['subscription', orgId] })
     },
   })
 
@@ -161,20 +156,17 @@ function AddonCard({
     onSuccess: () => {
       setConfirmAction(null)
       queryClient.invalidateQueries({ queryKey: ['server-addons', orgId, serverId] })
-      queryClient.invalidateQueries({ queryKey: ['subscription', orgId] })
     },
   })
 
   const canForceRemove = isActive && (server?.status !== 'online' || Boolean(uninstall.error))
-  const canInstall = compatibility.compatible && !installLimitReached
-  const statusDotClass = isActive || canInstall ? 'bg-success' : installLimitReached ? 'bg-amber-400' : 'bg-red-500'
+  const canInstall = compatibility.compatible
+  const statusDotClass = isActive || canInstall ? 'bg-success' : 'bg-red-500'
   const statusText = isActive
     ? t('addons.installedStandalone')
-    : installLimitReached
-      ? t('addons.planLimitReachedShort')
-      : compatibility.compatible
-        ? t('addons.readyToInstall')
-        : t('addons.installBlockedShort')
+    : compatibility.compatible
+      ? t('addons.readyToInstall')
+      : t('addons.installBlockedShort')
   const statusHint = isActive && installation
     ? ''
     : compatibility.compatible
@@ -226,7 +218,7 @@ function AddonCard({
         </div>
       )}
 
-      {!isActive && !installLimitReached && !compatibility.compatible ? (
+      {!isActive && !compatibility.compatible ? (
         <button
           type="button"
           onClick={() => setShowBlockedDetails(true)}
@@ -426,13 +418,6 @@ export function AddonsPage() {
     enabled: !!orgId,
   })
 
-  const { data: subscription } = useQuery({
-    queryKey: ['subscription', orgId],
-    queryFn: () => plansApi.getSubscription(orgId),
-    enabled: !!orgId,
-    staleTime: 30_000,
-  })
-
   const requestedServerId = searchParams.get('serverId') ?? ''
   const selectedServerId = useMemo(() => {
     if (requestedServerId && servers.some(server => server.id === requestedServerId)) {
@@ -464,9 +449,6 @@ export function AddonsPage() {
     () => new Map(installationRows.map(installation => [installation.addOnId, installation])),
     [installationRows],
   )
-  const installedAddOnsUsed = subscription?.usage.installedAddOns ?? 0
-  const installedAddOnLimitReached = hasReachedPlanLimit(installedAddOnsUsed, subscription?.maxInstalledAddOns)
-
   const isLoading = loadingAddons || loadingServers
 
   return (
@@ -538,7 +520,6 @@ export function AddonsPage() {
                   serverId={selectedServerId}
                   orgId={orgId}
                   canManage={canManage}
-                  installLimitReached={installedAddOnLimitReached}
                   onManage={
                     selectedServerId
                       ? () => navigate(`/addons/${selectedServerId}/${addon.slug}`)

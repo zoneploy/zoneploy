@@ -22,11 +22,6 @@ import { encrypt, decrypt } from '../../lib/crypto.js'
 import { generateDeployToken, hashDeployToken } from '../../lib/deploy-token.js'
 import type { CreateStackInput, UpdateStackInput } from '@zoneploy/types'
 import { config } from '../../config.js'
-import {
-  assertCustomDomainLimit,
-  assertDeploymentLimit,
-  assertSubdomainLimit,
-} from '../../lib/plan-limits.js'
 import { getEnvSecretsDecrypted } from '../environments/environments.service.js'
 import { findVerifiedCustomDomainConflict } from '../../lib/custom-domain-claims.js'
 import { removeCustomDomainTls } from '../../lib/custom-domain-tls.js'
@@ -565,8 +560,6 @@ export async function listStackDeployments(orgId: string, stackId: string, page 
 }
 
 export async function createStack(orgId: string, input: CreateStackInput) {
-  await assertDeploymentLimit(orgId)
-
   const slug = generateSlug(input.name)
   const [existing] = await db
     .select({ id: stacks.id })
@@ -874,7 +867,6 @@ export async function addStackZoneployEndpoint(
   stackId: string,
   input: { port: number },
 ) {
-  await assertSubdomainLimit(orgId)
   await getStackRow(orgId, stackId)
   const counts = await getStackEndpointCounts(stackId)
   return addStackZoneployEndpointWithDeps(stackId, generateZoneploySlug(), counts.total, input.port, {
@@ -1058,7 +1050,6 @@ export async function addStackCustomEndpoint(
   input: { port: number; customDomain: string },
 ) {
   const routing = await resolveCustomDomainRoutingForOwner('stack', stackId)
-  await assertCustomDomainLimit(orgId)
   await getStackRow(orgId, stackId)
   const counts = await getStackEndpointCounts(stackId)
   return addStackCustomEndpointWithDeps(stackId, counts.total, input, routing, {

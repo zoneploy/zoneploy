@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
-import { OWNER_ONLY_PERMISSIONS, type OrgRole, type Permission } from '@zoneploy/types'
+import type { OrgRole, Permission } from '@zoneploy/types'
 import { db } from '../db/client.js'
 import { organizations, orgMembers, rolePermissions } from '../db/schema.js'
 import { and, eq, isNull } from 'drizzle-orm'
@@ -23,7 +23,6 @@ const BUILT_IN_PERMISSIONS: Record<Exclude<OrgRole, 'custom'>, Permission[]> = {
     'members:read', 'members:invite', 'members:manage',
     'organization:manage',
     'secrets:read', 'secrets:write',
-    'billing:read', 'billing:manage',
     'audit:read',
   ],
   admin: [
@@ -57,7 +56,7 @@ const BUILT_IN_PERMISSIONS: Record<Exclude<OrgRole, 'custom'>, Permission[]> = {
   ],
 }
 
-const OWNER_ONLY_PERMISSION_SET = new Set<Permission>(OWNER_ONLY_PERMISSIONS)
+const LEGACY_BLOCKED_PERMISSIONS = new Set<string>(['billing:read', 'billing:manage'])
 const BUILT_IN_ROLES = ['viewer', 'member', 'admin', 'owner'] as const
 
 function isBuiltInRole(role: OrgRole): role is Exclude<OrgRole, 'custom'> {
@@ -99,8 +98,8 @@ async function resolvePermissions(role: OrgRole, customRoleId: string | null): P
       .where(eq(rolePermissions.customRoleId, customRoleId))
 
     return rows
-      .map(r => r.permission as Permission)
-      .filter(permission => !OWNER_ONLY_PERMISSION_SET.has(permission))
+      .map(r => r.permission)
+      .filter(permission => !LEGACY_BLOCKED_PERMISSIONS.has(permission)) as Permission[]
   }
 
   return BUILT_IN_PERMISSIONS[role as Exclude<OrgRole, 'custom'>] ?? []

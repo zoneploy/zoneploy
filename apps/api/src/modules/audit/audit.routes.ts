@@ -5,14 +5,12 @@ import { auditLogs } from '../../db/schema.js'
 import { and, eq, gte, lte, desc } from 'drizzle-orm'
 import { authenticate } from '../../plugins/authenticate.js'
 import { authorize } from '../../plugins/authorize.js'
-import { assertPaidPlanFeature } from '../../lib/plan-limits.js'
 
 export async function auditRoutes(app: FastifyInstance) {
 
   // GET /organizations/:orgId/audit
   app.get('/', { preHandler: [authenticate, authorize.permission('audit:read')] }, async (request, reply) => {
     const { orgId } = request.params as { orgId: string }
-    await assertPaidPlanFeature(orgId, 'audit_log')
 
     const query = AuditQuerySchema.safeParse(request.query)
     if (!query.success) {

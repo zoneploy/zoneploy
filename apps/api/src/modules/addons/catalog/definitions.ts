@@ -1,4 +1,4 @@
-import type { AddOnCatalogDefinition, PlanAddOnCatalogEntry } from './types.js'
+import type { AddOnCatalogDefinition } from './types.js'
 
 export const ADDON_CATALOG: AddOnCatalogDefinition[] = [
   {
@@ -63,25 +63,6 @@ export const AGENT_MANAGED_ADDON_SLUGS = new Set(
     .filter(addon => addon.controlPlane === 'agent')
     .map(addon => addon.slug),
 )
-
-export const PLAN_ADDON_MATRIX: Record<string, PlanAddOnCatalogEntry[]> = {
-  free: [
-    { addonSlug: 'custom-domains-edge' },
-    { addonSlug: 'firewall-manager' },
-  ],
-  starter: [
-    { addonSlug: 'custom-domains-edge' },
-    { addonSlug: 'firewall-manager' },
-  ],
-  pro: [
-    { addonSlug: 'custom-domains-edge' },
-    { addonSlug: 'firewall-manager' },
-  ],
-  enterprise: [
-    { addonSlug: 'custom-domains-edge' },
-    { addonSlug: 'firewall-manager' },
-  ],
-}
 
 export function getAddOnCatalogDefinition(slug: string) {
   return ADDON_CATALOG.find(addon => addon.slug === slug) ?? null

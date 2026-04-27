@@ -14,10 +14,9 @@ export type Permission =
   | 'members:read'     | 'members:invite'      | 'members:manage'
   | 'organization:manage'
   | 'secrets:read'     | 'secrets:write'
-  | 'billing:read'     | 'billing:manage'
   | 'audit:read'
 
-export const OWNER_ONLY_PERMISSIONS = ['billing:read', 'billing:manage'] as const satisfies readonly Permission[]
+export const OWNER_ONLY_PERMISSIONS = [] as const satisfies readonly Permission[]
 
 export const CUSTOM_ROLE_PERMISSIONS = [
   'projects:read', 'projects:create', 'projects:update', 'projects:delete',

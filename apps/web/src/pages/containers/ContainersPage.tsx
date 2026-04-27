@@ -6,7 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Plus, Box, Layers, Trash2, X, Copy, Check,
   GitBranch, RotateCcw, ScrollText, Square, Play,
-  AlertTriangle,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Card } from '@/components/ui/card'
@@ -15,7 +14,6 @@ import { CreateContainerSchema, CreateStackSchema, type CreateContainerInput, ty
 import { containersApi, type ContainerItem } from '@/api/containers'
 import { stacksApi, type StackItem } from '@/api/stacks'
 import { domainsApi } from '@/api/domains'
-import { plansApi } from '@/api/plans'
 import { projectsApi } from '@/api/projects'
 import { environmentsApi } from '@/api/environments'
 import { serversApi } from '@/api/servers'
@@ -30,7 +28,6 @@ import { Dialog } from '@/components/ui/dialog'
 import { ContainerStatusBadge } from '@/components/shared/ContainerStatusBadge'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { hasReachedPlanLimit } from '@/lib/plan-limits'
 
 /** registry.host/org/name:tag -> registry.host/tag */
 function formatImage(image: string | null): string {
@@ -170,18 +167,10 @@ function CreateContainerForm({ orgId, onClose }: { orgId: string; onClose: () =>
   const [projectId, setProjectId] = useState('')
   const [environmentId, setEnvironmentId] = useState('')
   const [serverId, setServerId] = useState('')
-  const [formError, setFormError] = useState('')
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<CreateContainerInput>({
     resolver: zodResolver(CreateContainerSchema),
     defaultValues: { port: 3000 },
-  })
-
-  const { data: subscription } = useQuery({
-    queryKey: ['subscription', orgId],
-    queryFn: () => plansApi.getSubscription(orgId),
-    enabled: !!orgId,
-    staleTime: 30_000,
   })
 
   const handleSetEnvironmentId = (v: string) => {
@@ -216,25 +205,11 @@ function CreateContainerForm({ orgId, onClose }: { orgId: string; onClose: () =>
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['containers', orgId] })
-      queryClient.invalidateQueries({ queryKey: ['subscription', orgId] })
       setDeployToken(result.deployToken)
     },
   })
 
   const onSubmit = (data: CreateContainerInput) => {
-    setFormError('')
-    const validPorts = getValidExtraPorts()
-    if (subscription && subscription.maxSubdomains !== -1) {
-      const remainingSubdomains = Math.max(0, subscription.maxSubdomains - subscription.usage.subdomains)
-      if (validPorts.length > remainingSubdomains) {
-        setFormError(t('containers.extraPortsPlanLimitReached', {
-          remaining: remainingSubdomains,
-          used: subscription.usage.subdomains,
-          max: subscription.maxSubdomains,
-        }))
-        return
-      }
-    }
     create.mutate(data)
   }
 
@@ -263,9 +238,9 @@ function CreateContainerForm({ orgId, onClose }: { orgId: string; onClose: () =>
 
   return (
     <form onSubmit={handleSubmit(onSubmit, errs => console.error('[CreateContainer]', errs))} className="space-y-4">
-      {(create.error || formError) && (
+      {create.error && (
         <div className="rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-400">
-          {formError || (create.error as Error).message}
+          {(create.error as Error).message}
         </div>
       )}
 
@@ -335,7 +310,6 @@ function CreateStackForm({ orgId, onClose }: { orgId: string; onClose: () => voi
   const [projectId, setProjectId] = useState('')
   const [environmentId, setEnvironmentId] = useState('')
   const [serverId, setServerId] = useState('')
-  const [formError, setFormError] = useState('')
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<CreateStackInput>({
     resolver: zodResolver(CreateStackSchema),
@@ -361,13 +335,11 @@ function CreateStackForm({ orgId, onClose }: { orgId: string; onClose: () => voi
     mutationFn: (data: CreateStackInput) => stacksApi.create(orgId, data),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['stacks', orgId] })
-      queryClient.invalidateQueries({ queryKey: ['subscription', orgId] })
       setDeployToken(result.deployToken)
     },
   })
 
   const onSubmit = (data: CreateStackInput) => {
-    setFormError('')
     create.mutate(data)
   }
 
@@ -396,9 +368,9 @@ function CreateStackForm({ orgId, onClose }: { orgId: string; onClose: () => voi
 
   return (
     <form onSubmit={handleSubmit(onSubmit, errs => console.error('[CreateStack]', errs))} className="space-y-4">
-      {(create.error || formError) && (
+      {create.error && (
         <div className="rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-400">
-          {formError || (create.error as Error).message}
+          {(create.error as Error).message}
         </div>
       )}
 
@@ -455,7 +427,6 @@ function ContainerCard({
     mutationFn: () => containersApi.delete(orgId, container.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['containers', orgId] })
-      queryClient.invalidateQueries({ queryKey: ['subscription', orgId] })
     },
   })
 
@@ -654,7 +625,6 @@ function StackCard({
     mutationFn: () => stacksApi.delete(orgId, stack.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stacks', orgId] })
-      queryClient.invalidateQueries({ queryKey: ['subscription', orgId] })
     },
   })
   const startService = useMutation({
@@ -908,12 +878,6 @@ export function ContainersPage() {
     enabled: !!orgId,
   })
 
-  const { data: subscription } = useQuery({
-    queryKey: ['subscription', orgId],
-    queryFn: () => plansApi.getSubscription(orgId),
-    enabled: !!orgId,
-    staleTime: 30_000,
-  })
   const { data: environmentColors = {} } = useQuery({
     queryKey: ['environment-colors', orgId],
     enabled: !!orgId,
@@ -935,8 +899,6 @@ export function ContainersPage() {
 
   const runningContainers = containers.filter(c => c.status === 'running' || c.status === 'deploying').length
   const runningStacks = stacks.filter(s => s.status === 'running' || s.status === 'partial' || s.status === 'deploying').length
-  const usedDeployments = Math.max(subscription?.usage.deployments ?? 0, containers.length + stacks.length)
-  const deploymentLimitReached = hasReachedPlanLimit(usedDeployments, subscription?.maxDeployments)
 
   const setTab = (nextTab: 'containers' | 'stacks') => {
     const params = new URLSearchParams(searchParams)
@@ -956,23 +918,12 @@ export function ContainersPage() {
         title={t('nav.deployments')}
         subtitle={subtitle}
         action={canManage && (
-          <Button onClick={() => setShowCreate(true)} disabled={deploymentLimitReached}>
+          <Button onClick={() => setShowCreate(true)}>
             <Plus size={14} />
             {tab === 'containers' ? t('containers.create') : t('stacks.create')}
           </Button>
         )}
       />
-
-      {deploymentLimitReached && subscription && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <div className="flex items-start gap-2">
-            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-400" />
-            <p className="text-sm text-amber-300">
-              {t('containers.planLimitReached', { used: usedDeployments, max: subscription.maxDeployments })}
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-grey-100">
@@ -1001,7 +952,7 @@ export function ContainersPage() {
         containers.length === 0 ? (
           <Card>
             <EmptyState icon={Box} title={t('containers.empty')} subtitle={t('containers.emptySubtitle')}
-              action={canManage && !deploymentLimitReached ? { label: t('containers.create'), onClick: () => setShowCreate(true), icon: <Plus size={13} /> } : undefined}
+              action={canManage ? { label: t('containers.create'), onClick: () => setShowCreate(true), icon: <Plus size={13} /> } : undefined}
             />
           </Card>
         ) : (
@@ -1024,7 +975,7 @@ export function ContainersPage() {
         stacks.length === 0 ? (
           <Card>
             <EmptyState icon={Layers} title={t('stacks.empty')} subtitle={t('stacks.emptySubtitle')}
-              action={canManage && !deploymentLimitReached ? { label: t('stacks.create'), onClick: () => setShowCreate(true), icon: <Plus size={13} /> } : undefined}
+              action={canManage ? { label: t('stacks.create'), onClick: () => setShowCreate(true), icon: <Plus size={13} /> } : undefined}
             />
           </Card>
         ) : (

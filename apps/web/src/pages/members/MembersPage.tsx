@@ -618,7 +618,7 @@ const ROLE_DEFS: { role: Exclude<OrgRole, 'custom'>; icon: React.ElementType; co
 ]
 
 const ROLE_PERMS: Record<Exclude<OrgRole, 'custom'>, string[]> = {
-  owner:   ['members.perms.manageOrg', 'members.perms.billing', 'members.perms.manageMembers', 'members.perms.manageServers', 'members.perms.manageContainers', 'members.perms.viewAll'],
+  owner:   ['members.perms.manageOrg', 'members.perms.manageMembers', 'members.perms.manageServers', 'members.perms.manageContainers', 'members.perms.viewAll'],
   admin:   ['members.perms.manageMembers', 'members.perms.manageServers', 'members.perms.manageContainers', 'members.perms.viewAll'],
   member:  ['members.perms.manageContainers', 'members.perms.viewAll'],
   viewer:  ['members.perms.viewAll'],

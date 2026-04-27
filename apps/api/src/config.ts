@@ -5,7 +5,6 @@ const emptyToUndefined = (value: unknown) => (value === '' ? undefined : value)
 const optionalString = z.preprocess(emptyToUndefined, z.string().optional())
 const optionalUrl = z.preprocess(emptyToUndefined, z.string().url().optional())
 const optionalEmail = z.preprocess(emptyToUndefined, z.string().email().optional())
-const stringWithDefault = (fallback: string) => z.preprocess(emptyToUndefined, z.string().default(fallback))
 
 const ConfigSchema = z.object({
   // Server
@@ -62,22 +61,6 @@ const ConfigSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
-
-  // Billing
-  BILLING_SUCCESS_URL: optionalUrl,
-  BILLING_CANCEL_URL: optionalUrl,
-  STRIPE_SECRET_KEY: optionalString,
-  STRIPE_WEBHOOK_SECRET: optionalString,
-  STRIPE_PRICE_STARTER_MONTHLY: optionalString,
-  STRIPE_PRICE_PRO_MONTHLY: optionalString,
-  STRIPE_PRICE_ENTERPRISE_MONTHLY: optionalString,
-  MERCADOPAGO_ACCESS_TOKEN: optionalString,
-  MERCADOPAGO_PUBLIC_KEY: optionalString,
-  MERCADOPAGO_WEBHOOK_SECRET: optionalString,
-  MERCADOPAGO_CURRENCY: stringWithDefault('ARS'),
-  MERCADOPAGO_PLAN_STARTER_MONTHLY: optionalString,
-  MERCADOPAGO_PLAN_PRO_MONTHLY: optionalString,
-  MERCADOPAGO_PLAN_ENTERPRISE_MONTHLY: optionalString,
 
   // Wildcard cert for HTTPS (*.ROUTING_DOMAIN).
   // Directory containing cert.pem and key.pem from setup-wildcard-cert.sh.

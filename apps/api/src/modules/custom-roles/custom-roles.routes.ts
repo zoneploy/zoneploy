@@ -7,7 +7,6 @@ import { authenticate } from '../../plugins/authenticate.js'
 import { authorize } from '../../plugins/authorize.js'
 import { AppError } from '../../lib/errors.js'
 import { audit } from '../../lib/audit.js'
-import { assertPaidPlanFeature } from '../../lib/plan-limits.js'
 
 export async function customRoleRoutes(app: FastifyInstance) {
   const canViewRoles = authorize.any(['members:read', 'members:invite', 'members:manage'])
@@ -32,7 +31,6 @@ export async function customRoleRoutes(app: FastifyInstance) {
 
   app.post('/', { preHandler: [authenticate, authorize.permission('members:manage')] }, async (request, reply) => {
     const { orgId } = request.params as { orgId: string }
-    await assertPaidPlanFeature(orgId, 'custom_roles')
 
     const input = CreateCustomRoleSchema.safeParse(request.body)
     if (!input.success) {
@@ -66,7 +64,6 @@ export async function customRoleRoutes(app: FastifyInstance) {
 
   app.patch('/:roleId', { preHandler: [authenticate, authorize.permission('members:manage')] }, async (request, reply) => {
     const { orgId, roleId } = request.params as { orgId: string; roleId: string }
-    await assertPaidPlanFeature(orgId, 'custom_roles')
 
     const input = UpdateCustomRoleSchema.safeParse(request.body)
     if (!input.success) {
@@ -100,7 +97,6 @@ export async function customRoleRoutes(app: FastifyInstance) {
 
   app.delete('/:roleId', { preHandler: [authenticate, authorize.permission('members:manage')] }, async (request, reply) => {
     const { orgId, roleId } = request.params as { orgId: string; roleId: string }
-    await assertPaidPlanFeature(orgId, 'custom_roles')
 
     try {
       const role = await getCustomRole(orgId, roleId)

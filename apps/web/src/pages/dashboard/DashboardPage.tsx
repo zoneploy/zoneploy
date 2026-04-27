@@ -10,7 +10,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useAuthStore } from '@/stores/auth'
-import { organizationsApi } from '@/api/organizations'
 import { authApi } from '@/api/auth'
 import { membersApi, invitationsApi } from '@/api/members'
 import { serversApi } from '@/api/servers'
@@ -180,12 +179,6 @@ export function DashboardPage() {
   const session = useAuthStore(s => s.session)
   const orgId = session?.org?.id ?? ''
 
-  const { data: org } = useQuery({
-    queryKey: ['org', orgId],
-    queryFn: () => organizationsApi.get(orgId),
-    enabled: !!orgId,
-  })
-
   const { data: servers = [] } = useQuery({
     queryKey: ['servers', orgId],
     queryFn: () => serversApi.list(orgId),
@@ -220,8 +213,6 @@ export function DashboardPage() {
 
   if (!session?.org) return <NoOrgDashboard />
 
-  const maxServers = org?.subscription?.planMaxServers ?? 1
-  const maxDeployments = org?.subscription?.planMaxDeployments ?? 2
   const firstName = session.user?.fullName?.split(' ')[0]
   const deploymentCount = containers.length + stacks.length
 
@@ -324,22 +315,13 @@ export function DashboardPage() {
           icon={Server}
           label={t('dashboard.servers')}
           value={servers.length}
-          sublabel={
-            <span className="text-xs text-text-secondary">
-              {t('dashboard.available', { max: maxServers === -1 ? '∞' : maxServers })}
-            </span>
-          }
           onClick={() => navigate('/server')}
         />
         <StatCard
           icon={Box}
           label={t('dashboard.deployments')}
           value={deploymentCount}
-          sublabel={containerSublabel ?? (
-            <span className="text-xs text-text-secondary">
-              {t('dashboard.available', { max: maxDeployments === -1 ? '∞' : maxDeployments })}
-            </span>
-          )}
+          sublabel={containerSublabel}
           accent={errored > 0 ? 'error' : 'default'}
           onClick={() => navigate('/deployments')}
         />

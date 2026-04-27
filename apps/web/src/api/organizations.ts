@@ -5,7 +5,6 @@ export interface OrgDetail {
   name: string
   slug: string
   ownerId: string
-  billingCountry: 'AR' | 'US' | null
   logoUrl: string | null
   status: string
   require2fa: boolean
@@ -13,18 +12,6 @@ export interface OrgDetail {
   customRoleId: string | null
   permissions: import('@zoneploy/types').Permission[]
   createdAt: string
-  subscription: {
-    id: string
-    status: string
-    currentPeriodEnd: string
-    planName: string
-    planSlug: string
-    planMaxServers: number
-    planMaxDeployments: number
-    planMaxSubdomains: number
-    planMaxCustomDomains: number
-    planMaxInstalledAddOns: number
-  } | null
 }
 
 export interface OrgSummary {
@@ -49,7 +36,7 @@ export const organizationsApi = {
   get: (orgId: string) =>
     apiClient.get<OrgDetail>(`/organizations/${orgId}`),
 
-  update: (orgId: string, data: { name?: string; require2fa?: boolean; billingCountry?: 'AR' | 'US' | null }) =>
+  update: (orgId: string, data: { name?: string; require2fa?: boolean }) =>
     apiClient.patch<OrgDetail>(`/organizations/${orgId}`, data),
 
   uploadLogo: (orgId: string, file: File) => {

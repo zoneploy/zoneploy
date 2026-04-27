@@ -5,7 +5,6 @@ import { authorize } from '../../plugins/authorize.js'
 import { AppError } from '../../lib/errors.js'
 import { listMembers, changeMemberRole, removeMember, transferOwnership, getMemberAuditProfile } from './members.service.js'
 import { audit } from '../../lib/audit.js'
-import { assertPaidPlanFeature } from '../../lib/plan-limits.js'
 
 const ChangeRoleSchema = z.object({
   role: z.enum(['admin', 'member', 'viewer', 'custom']),
@@ -32,10 +31,6 @@ export async function memberRoutes(app: FastifyInstance) {
     if (!input.success) {
       return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Rol inválido' } })
     }
-    if (input.data.role === 'custom') {
-      await assertPaidPlanFeature(orgId, 'custom_roles')
-    }
-
     try {
       const targetMember = await getMemberAuditProfile(orgId, targetUserId)
       const updated = await changeMemberRole(orgId, request.userId, targetUserId, input.data.role as any, input.data.customRoleId)

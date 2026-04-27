@@ -1,13 +1,11 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { db } from '../../db/client.js'
 import {
   addOns,
   containers,
-  planAddOns,
   serverAddOnInstallations,
   servers,
   stacks,
-  subscriptions,
 } from '../../db/schema.js'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../lib/errors.js'
 import { WorkerClientError, workerClient } from '../../lib/worker-client.js'
@@ -19,7 +17,6 @@ import { AGENT_MANAGED_ADDON_SLUGS } from './catalog/index.js'
 
 export type OwnerType = 'container' | 'stack'
 export type BindingScope = 'container' | 'stack'
-const ENTITLED_SUBSCRIPTION_STATUSES: Array<'active' | 'trialing' | 'past_due'> = ['active', 'trialing', 'past_due']
 const FIREWALL_MANAGER_SLUG = 'firewall-manager'
 const DEFAULT_FIREWALL_MANAGER_SSH_PORT = 22
 const DEFAULT_FIREWALL_MANAGER_AGENT_PORT = 4000
@@ -90,17 +87,6 @@ export function evaluateAddonRequirements(
   }
 }
 
-export async function getActiveSubscription(orgId: string) {
-  const [sub] = await db
-    .select({ planId: subscriptions.planId })
-    .from(subscriptions)
-    .where(and(eq(subscriptions.orgId, orgId), inArray(subscriptions.status, ENTITLED_SUBSCRIPTION_STATUSES)))
-    .limit(1)
-
-  if (!sub) throw new NotFoundError('Active subscription not found')
-  return sub
-}
-
 export async function ensureServerOwned(orgId: string, serverId: string) {
   const [server] = await db
     .select()
@@ -136,10 +122,7 @@ export function normalizeServerAddonSnapshot(server: Awaited<ReturnType<typeof e
   }
 }
 
-export async function ensureAddonAvailableForPlan(orgId: string, addonId: string) {
-  const sub = await getActiveSubscription(orgId)
-  const conditions = [eq(planAddOns.planId, sub.planId), eq(planAddOns.addOnId, addonId), eq(addOns.isActive, true)]
-
+export async function ensureAddonAvailableForPlan(_orgId: string, addonId: string) {
   const [row] = await db
     .select({
       addOnId: addOns.id,
@@ -155,15 +138,14 @@ export async function ensureAddonAvailableForPlan(orgId: string, addonId: string
       managedComponents: addOns.managedComponents,
       uiMetadata: addOns.uiMetadata,
       isActive: addOns.isActive,
-      limits: planAddOns.limits,
     })
-    .from(planAddOns)
-    .innerJoin(addOns, eq(planAddOns.addOnId, addOns.id))
-    .where(and(...conditions))
+    .from(addOns)
+    .where(eq(addOns.id, addonId))
     .limit(1)
 
-  if (!row) throw new ForbiddenError('This add-on is not available in your plan')
-  return row
+  if (!row) throw new NotFoundError('Add-on not found')
+  if (!row.isActive) throw new ForbiddenError('This add-on is not available')
+  return { ...row, limits: {} }
 }
 
 export async function getAddonDefinition(addonId: string) {

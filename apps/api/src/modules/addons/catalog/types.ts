@@ -19,8 +19,3 @@ export interface AddOnCatalogDefinition {
   uiMetadata: AddOnUiMetadata
   isActive: boolean
 }
-
-export interface PlanAddOnCatalogEntry {
-  addonSlug: string
-  limits?: Record<string, unknown>
-}
