@@ -23,6 +23,7 @@ export const REDIS_KEYS = {
 
   // Refresh tokens for invalidation.
   refreshToken: (tokenHash: string) => `rs:rt:${tokenHash}`,
+  refreshTokenGrace: (tokenHash: string) => `rs:rt:grace:${tokenHash}`,
 
   // WebAuthn: challenges temporales (TTL 5 min)
   webauthnChallenge: (userId: string) => `rs:webauthn:challenge:${userId}`,

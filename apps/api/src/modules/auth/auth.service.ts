@@ -17,12 +17,17 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib
 import { AppError, ConflictError, NotFoundError, UnauthorizedError, InvalidCredentialsError, BadRequestError, ForbiddenError } from '../../lib/errors.js'
 import { sendMail, verificationEmail } from '../../lib/mailer.js'
 import { config } from '../../config.js'
+import { redis, REDIS_KEYS } from '../../lib/redis.js'
 import type { RegisterInput, LoginInput } from '@zoneploy/types'
 import { createNotification } from '../notifications/notifications.service.js'
 import { resolvePermissions } from '../../plugins/authorize.js'
 import { createOrg } from '../organizations/organizations.service.js'
 
 // Helpers
+
+type RefreshTokenRecord = typeof refreshTokens.$inferSelect
+
+const REFRESH_TOKEN_ROTATION_GRACE_SECONDS = 120
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
@@ -66,6 +71,38 @@ async function issueTokens(userId: string, email: string, name: string, ctx?: Se
   })
 
   return { accessToken, refreshToken, sessionId }
+}
+
+async function findRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenRecord | undefined> {
+  const [stored] = await db
+    .select()
+    .from(refreshTokens)
+    .where(eq(refreshTokens.tokenHash, tokenHash))
+    .limit(1)
+
+  return stored
+}
+
+async function findRefreshTokenByGrace(tokenHash: string): Promise<RefreshTokenRecord | undefined> {
+  const sessionId = await redis
+    .get(REDIS_KEYS.refreshTokenGrace(tokenHash))
+    .catch(() => null)
+
+  if (!sessionId) return undefined
+
+  const [stored] = await db
+    .select()
+    .from(refreshTokens)
+    .where(eq(refreshTokens.id, sessionId))
+    .limit(1)
+
+  return stored
+}
+
+async function rememberRefreshTokenGrace(tokenHash: string, sessionId: string) {
+  await redis
+    .set(REDIS_KEYS.refreshTokenGrace(tokenHash), sessionId, 'EX', REFRESH_TOKEN_ROTATION_GRACE_SECONDS)
+    .catch(() => null)
 }
 
 async function createVerificationToken(userId: string): Promise<string> {
@@ -388,13 +425,9 @@ export async function refresh(token: string) {
   }
 
   const tokenHash = hashToken(token)
-  const [stored] = await db
-    .select()
-    .from(refreshTokens)
-    .where(eq(refreshTokens.tokenHash, tokenHash))
-    .limit(1)
+  const stored = await findRefreshTokenByHash(tokenHash) ?? await findRefreshTokenByGrace(tokenHash)
 
-  if (!stored || stored.expiresAt < new Date()) {
+  if (!stored || stored.userId !== payload.sub || stored.expiresAt < new Date()) {
     throw new UnauthorizedError('Refresh token expirado o revocado')
   }
 
@@ -422,6 +455,8 @@ export async function refresh(token: string) {
   const newAccessToken = signAccessToken({ sub: user.id, email: user.email, name: user.fullName, sid: stored.id })
 
   const newExpiresAt = new Date(Date.now() + parseDurationMs(config.JWT_REFRESH_EXPIRES_IN))
+
+  await rememberRefreshTokenGrace(stored.tokenHash, stored.id)
 
   await db
     .update(refreshTokens)
@@ -464,7 +499,16 @@ export async function refresh(token: string) {
 
 export async function logout(token: string) {
   const tokenHash = hashToken(token)
+  const stored = await findRefreshTokenByHash(tokenHash) ?? await findRefreshTokenByGrace(tokenHash)
+
+  if (stored) {
+    await db.delete(refreshTokens).where(eq(refreshTokens.id, stored.id))
+    await redis.del(REDIS_KEYS.refreshTokenGrace(tokenHash), REDIS_KEYS.refreshTokenGrace(stored.tokenHash)).catch(() => null)
+    return
+  }
+
   await db.delete(refreshTokens).where(eq(refreshTokens.tokenHash, tokenHash))
+  await redis.del(REDIS_KEYS.refreshTokenGrace(tokenHash)).catch(() => null)
 }
 
 export async function getPendingInvitations(email: string) {
