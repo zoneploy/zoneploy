@@ -2,8 +2,6 @@ import type {
   UserStatus,
   OrgRole,
   OrgStatus,
-  InvitationStatus,
-  SubscriptionStatus,
   ServerAgentMode,
   ServerStatus,
   ContainerStatus,
@@ -68,64 +66,6 @@ export interface OrgMember {
   joinedAt: string
   // Expanded with user data.
   user?: Pick<User, 'id' | 'email' | 'fullName' | 'avatarUrl' | 'totpEnabled'>
-}
-
-// OrgInvitation
-
-export interface OrgInvitation {
-  id: string
-  orgId: string
-  invitedByUserId: string
-  email: string
-  role: OrgRole
-  customRoleId: string | null
-  customRoleName?: string | null
-  customRole?: Pick<CustomRole, 'id' | 'name'>
-  status: InvitationStatus
-  expiresAt: string
-  createdAt: string
-}
-
-// Plan
-
-export interface Plan {
-  id: string
-  name: string
-  slug: string
-  features: string[]
-  maxServers: number
-  maxDeployments: number
-  maxSubdomains: number
-  maxCustomDomains: number
-  maxInstalledAddOns: number
-  priceMonthlyUsd: number
-  isActive: boolean
-  sortOrder: number
-  addOns: PlanAddOn[]
-}
-
-// PlanAddOn
-
-export interface PlanAddOn {
-  planId: string
-  addOnId: string
-  limits: Record<string, unknown>
-  addOn?: AddOn
-}
-
-// Subscription
-
-export interface Subscription {
-  id: string
-  orgId: string
-  planId: string
-  status: SubscriptionStatus
-  currentPeriodStart: string
-  currentPeriodEnd: string
-  canceledAt: string | null
-  createdAt: string
-  updatedAt: string
-  plan?: Plan
 }
 
 // Project

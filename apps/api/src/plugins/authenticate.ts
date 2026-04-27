@@ -1,5 +1,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
+import { eq } from 'drizzle-orm'
 import { verifyAccessToken } from '../lib/jwt.js'
+import { db } from '../db/client.js'
+import { users } from '../db/schema.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -21,6 +24,16 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
 
   try {
     const payload = verifyAccessToken(token)
+    const [user] = await db
+      .select({ id: users.id, status: users.status, deletedAt: users.deletedAt })
+      .from(users)
+      .where(eq(users.id, payload.sub))
+      .limit(1)
+
+    if (!user || user.status !== 'active' || user.deletedAt) {
+      return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Cuenta no disponible' } })
+    }
+
     request.userId = payload.sub
     request.userEmail = payload.email
     request.userName = payload.name ?? ''

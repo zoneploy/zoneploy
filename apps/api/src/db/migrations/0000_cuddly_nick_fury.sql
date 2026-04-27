@@ -46,20 +46,6 @@ CREATE TABLE IF NOT EXISTS "audit_logs" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "billing_events" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"provider" text NOT NULL,
-	"event_id" text NOT NULL,
-	"event_type" text NOT NULL,
-	"org_id" uuid,
-	"subscription_id" uuid,
-	"status" text DEFAULT 'received' NOT NULL,
-	"payload" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"error_message" text,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"processed_at" timestamp
-);
---> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "container_deployments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"container_id" uuid NOT NULL,
@@ -135,15 +121,6 @@ CREATE TABLE IF NOT EXISTS "custom_roles" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "email_verification_tokens" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" uuid NOT NULL,
-	"token_hash" text NOT NULL,
-	"expires_at" timestamp NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "email_verification_tokens_token_hash_unique" UNIQUE("token_hash")
-);
---> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "env_secrets" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"environment_id" uuid NOT NULL,
@@ -180,20 +157,6 @@ CREATE TABLE IF NOT EXISTS "notifications" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "org_invitations" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"org_id" uuid NOT NULL,
-	"invited_by_user_id" uuid NOT NULL,
-	"email" text NOT NULL,
-	"role" text NOT NULL,
-	"custom_role_id" uuid,
-	"token" text NOT NULL,
-	"status" text DEFAULT 'pending' NOT NULL,
-	"expires_at" timestamp NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "org_invitations_token_unique" UNIQUE("token")
-);
---> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "org_members" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"org_id" uuid NOT NULL,
@@ -208,7 +171,6 @@ CREATE TABLE IF NOT EXISTS "organizations" (
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
 	"owner_id" uuid NOT NULL,
-	"billing_country" text,
 	"logo_url" text,
 	"logo_key" text,
 	"require_2fa" boolean DEFAULT false NOT NULL,
@@ -239,30 +201,6 @@ CREATE TABLE IF NOT EXISTS "password_reset_tokens" (
 	"expires_at" timestamp NOT NULL,
 	"used" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "plan_add_ons" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"plan_id" uuid NOT NULL,
-	"add_on_id" uuid NOT NULL,
-	"limits" jsonb DEFAULT '{}'::jsonb NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "plans" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"name" text NOT NULL,
-	"slug" text NOT NULL,
-	"features" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"max_servers" integer NOT NULL,
-	"max_containers" integer DEFAULT -1 NOT NULL,
-	"max_subdomains" integer DEFAULT -1 NOT NULL,
-	"max_custom_domains" integer DEFAULT -1 NOT NULL,
-	"max_installed_add_ons" integer DEFAULT -1 NOT NULL,
-	"price_monthly_usd" numeric(10, 2) NOT NULL,
-	"is_active" boolean DEFAULT true NOT NULL,
-	"sort_order" integer DEFAULT 0 NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "plans_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "projects" (
@@ -399,36 +337,6 @@ CREATE TABLE IF NOT EXISTS "stacks" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "subscriptions" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"org_id" uuid NOT NULL,
-	"plan_id" uuid NOT NULL,
-	"status" text DEFAULT 'active' NOT NULL,
-	"billing_provider" text,
-	"current_period_start" timestamp NOT NULL,
-	"current_period_end" timestamp NOT NULL,
-	"canceled_at" timestamp,
-	"external_customer_id" text,
-	"external_subscription_id" text,
-	"external_price_id" text,
-	"external_status" text,
-	"payment_failure_at" timestamp,
-	"grace_period_started_at" timestamp,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "user_auth_identities" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" uuid NOT NULL,
-	"provider" text NOT NULL,
-	"provider_user_id" text NOT NULL,
-	"provider_email" text,
-	"provider_email_verified" boolean DEFAULT false NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"email" text NOT NULL,
@@ -436,10 +344,12 @@ CREATE TABLE IF NOT EXISTS "users" (
 	"full_name" text NOT NULL,
 	"avatar_url" text,
 	"status" text DEFAULT 'active' NOT NULL,
-	"email_verified" boolean DEFAULT false NOT NULL,
+	"email_verified" boolean DEFAULT true NOT NULL,
 	"is_platform_admin" boolean DEFAULT false NOT NULL,
 	"totp_secret" text,
 	"totp_enabled" boolean DEFAULT false NOT NULL,
+	"deleted_at" timestamp,
+	"deleted_by_user_id" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "users_email_unique" UNIQUE("email")
@@ -481,18 +391,6 @@ END $$;
 --> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "billing_events" ADD CONSTRAINT "billing_events_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE set null ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "billing_events" ADD CONSTRAINT "billing_events_subscription_id_subscriptions_id_fk" FOREIGN KEY ("subscription_id") REFERENCES "public"."subscriptions"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -564,12 +462,6 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "email_verification_tokens" ADD CONSTRAINT "email_verification_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
  ALTER TABLE "env_secrets" ADD CONSTRAINT "env_secrets_environment_id_environments_id_fk" FOREIGN KEY ("environment_id") REFERENCES "public"."environments"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -606,24 +498,6 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "org_invitations" ADD CONSTRAINT "org_invitations_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "org_invitations" ADD CONSTRAINT "org_invitations_invited_by_user_id_users_id_fk" FOREIGN KEY ("invited_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "org_invitations" ADD CONSTRAINT "org_invitations_custom_role_id_custom_roles_id_fk" FOREIGN KEY ("custom_role_id") REFERENCES "public"."custom_roles"("id") ON DELETE set null ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
  ALTER TABLE "org_members" ADD CONSTRAINT "org_members_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -649,18 +523,6 @@ END $$;
 --> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "passkeys" ADD CONSTRAINT "passkeys_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "plan_add_ons" ADD CONSTRAINT "plan_add_ons_plan_id_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."plans"("id") ON DELETE no action ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "plan_add_ons" ADD CONSTRAINT "plan_add_ons_add_on_id_add_ons_id_fk" FOREIGN KEY ("add_on_id") REFERENCES "public"."add_ons"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -774,24 +636,6 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_plan_id_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."plans"("id") ON DELETE no action ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "user_auth_identities" ADD CONSTRAINT "user_auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
  ALTER TABLE "zoneploy_public_endpoints" ADD CONSTRAINT "zoneploy_public_endpoints_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -808,9 +652,6 @@ CREATE INDEX IF NOT EXISTS "add_on_bindings_org_idx" ON "add_on_bindings" USING 
 CREATE INDEX IF NOT EXISTS "add_on_bindings_owner_idx" ON "add_on_bindings" USING btree ("owner_type","owner_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "audit_logs_org_created_idx" ON "audit_logs" USING btree ("org_id","created_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "audit_logs_actor_idx" ON "audit_logs" USING btree ("actor_id");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "billing_events_provider_event_idx" ON "billing_events" USING btree ("provider","event_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "billing_events_org_idx" ON "billing_events" USING btree ("org_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "billing_events_subscription_idx" ON "billing_events" USING btree ("subscription_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "deployments_container_idx" ON "container_deployments" USING btree ("container_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "deployments_org_idx" ON "container_deployments" USING btree ("org_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "secrets_container_key_idx" ON "container_secrets" USING btree ("container_id","key");--> statement-breakpoint
@@ -834,7 +675,6 @@ CREATE INDEX IF NOT EXISTS "notifications_user_read_idx" ON "notifications" USIN
 CREATE UNIQUE INDEX IF NOT EXISTS "org_members_org_user_idx" ON "org_members" USING btree ("org_id","user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "org_members_org_idx" ON "org_members" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "passkeys_user_idx" ON "passkeys" USING btree ("user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "plan_add_ons_plan_addon_idx" ON "plan_add_ons" USING btree ("plan_id","add_on_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "projects_org_slug_idx" ON "projects" USING btree ("org_id","slug");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "projects_org_idx" ON "projects" USING btree ("org_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "role_permissions_role_perm_idx" ON "role_permissions" USING btree ("custom_role_id","permission");--> statement-breakpoint
@@ -852,8 +692,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "stack_secrets_stack_key_idx" ON "stack_secret
 CREATE UNIQUE INDEX IF NOT EXISTS "stacks_env_slug_idx" ON "stacks" USING btree ("environment_id","slug");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "stacks_env_idx" ON "stacks" USING btree ("environment_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "stacks_org_idx" ON "stacks" USING btree ("org_id");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "user_auth_identities_provider_user_idx" ON "user_auth_identities" USING btree ("provider","provider_user_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "user_auth_identities_user_idx" ON "user_auth_identities" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "zoneploy_public_endpoints_org_idx" ON "zoneploy_public_endpoints" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "zoneploy_public_endpoints_owner_idx" ON "zoneploy_public_endpoints" USING btree ("owner_type","owner_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "zoneploy_public_endpoints_hostname_active_idx" ON "zoneploy_public_endpoints" USING btree ("hostname_label") WHERE "zoneploy_public_endpoints"."deleted_at" is null;--> statement-breakpoint

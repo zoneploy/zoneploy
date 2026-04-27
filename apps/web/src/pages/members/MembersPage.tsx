@@ -4,10 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
-  UserPlus, Trash2, Mail, ChevronDown, Check, Shield,
+  UserPlus, Trash2, ChevronDown, Check, Shield,
   Eye, Code2, ShieldCheck, Users, ShieldAlert,
 } from 'lucide-react'
-import { EmptyState } from '@/components/ui/empty-state'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { z } from 'zod'
@@ -113,15 +112,17 @@ function RoleSelector({
   )
 }
 
-// Invitation modal
+// Create user modal
 
-const InviteSchema = z.object({
-  email: z.string().email('Email inválido'),
+const CreateUserSchema = z.object({
+  fullName: z.string().min(2, 'Minimo 2 caracteres'),
+  email: z.string().email('Email invalido'),
+  password: z.string().min(8, 'Minimo 8 caracteres'),
   role: z.enum(['admin', 'member', 'viewer', 'custom']),
 })
-type InviteInput = z.infer<typeof InviteSchema>
+type CreateUserInput = z.infer<typeof CreateUserSchema>
 
-function InviteModal({
+function CreateUserModal({
   orgId,
   customRoles,
   canManageRoles,
@@ -137,36 +138,48 @@ function InviteModal({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [customRoleId, setCustomRoleId] = useState('')
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<InviteInput>({
-    resolver: zodResolver(InviteSchema),
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<CreateUserInput>({
+    resolver: zodResolver(CreateUserSchema),
     defaultValues: { role: canManageRoles ? 'member' : 'viewer' },
   })
 
   const selectedRole = watch('role')
 
-  const invite = useMutation({
-    mutationFn: (data: InviteInput) =>
-      membersApi.invite(orgId, {
+  const createUser = useMutation({
+    mutationFn: (data: CreateUserInput) =>
+      membersApi.create(orgId, {
+        fullName: data.fullName,
         email: data.email,
+        password: data.password,
         role: data.role as Exclude<OrgRole, 'owner'>,
         ...(data.role === 'custom' && customRoleId ? { customRoleId } : {}),
       }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['invitations', orgId] }); onClose() },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members', orgId] }); onClose() },
   })
 
   const isCustomWithoutRole = selectedRole === 'custom' && !customRoleId
 
   return (
-    <form onSubmit={handleSubmit(d => invite.mutate(d))} className="space-y-4">
-      {invite.error && (
+    <form onSubmit={handleSubmit(d => createUser.mutate(d))} className="space-y-4">
+      {createUser.error && (
         <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-400">
-          {(invite.error as Error).message}
+          {(createUser.error as Error).message}
         </div>
       )}
       <div className="space-y-1.5">
-        <Label htmlFor="invite-email">{t('members.inviteEmail')}</Label>
-        <Input id="invite-email" type="email" placeholder={t('members.inviteEmailPlaceholder')} {...register('email')} />
+        <Label htmlFor="user-full-name">{t('members.userFullName')}</Label>
+        <Input id="user-full-name" type="text" placeholder={t('members.userFullNamePlaceholder')} {...register('fullName')} />
+        {errors.fullName && <p className="text-xs text-red-400">{errors.fullName.message}</p>}
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="user-email">{t('members.userEmail')}</Label>
+        <Input id="user-email" type="email" placeholder={t('members.userEmailPlaceholder')} {...register('email')} />
         {errors.email && <p className="text-xs text-red-400">{errors.email.message}</p>}
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="user-password">{t('members.userPassword')}</Label>
+        <Input id="user-password" type="password" placeholder={t('members.userPasswordPlaceholder')} {...register('password')} />
+        {errors.password && <p className="text-xs text-red-400">{errors.password.message}</p>}
       </div>
       <div className="space-y-1.5">
         <Label>{t('common.role')}</Label>
@@ -184,20 +197,19 @@ function InviteModal({
         ) : (
           <div className="rounded-lg border border-grey-100 bg-grey-50 px-3 py-2">
             <RoleBadge role="viewer" />
-            <p className="mt-1 text-xs text-text-secondary">{t('members.inviteRoleLocked')}</p>
+            <p className="mt-1 text-xs text-text-secondary">{t('members.createRoleLocked')}</p>
           </div>
         )}
       </div>
       <div className="flex justify-end gap-2 pt-1">
         <Button type="button" variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
-        <Button type="submit" loading={invite.isPending} disabled={isCustomWithoutRole}>
-          <Mail size={14} />{t('members.sendInvite')}
+        <Button type="submit" loading={createUser.isPending} disabled={isCustomWithoutRole}>
+          <UserPlus size={14} />{t('members.createUser')}
         </Button>
       </div>
     </form>
   )
 }
-
 // Inline role change dropdown
 
 function RoleDropdown({
@@ -516,99 +528,7 @@ function MembersSection({ orgId, currentUserId, currentRole, customRoles }: {
   )
 }
 
-// Section 2: invitations
-
-function InvitationsSection({ orgId }: { orgId: string }) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-
-  const { data: invitations = [], isLoading } = useQuery({
-    queryKey: ['invitations', orgId],
-    queryFn: () => membersApi.listInvitations(orgId),
-    enabled: !!orgId,
-  })
-
-  const revoke = useMutation({
-    mutationFn: (id: string) => membersApi.revokeInvitation(orgId, id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['invitations', orgId] }),
-  })
-
-  return (
-    <Card className="p-0 overflow-hidden">
-      {/* Cabecera */}
-      <div className="flex items-center justify-between px-5 py-4">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
-            <Mail size={16} className="text-warning" strokeWidth={1.6} />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-text-primary">{t('members.invitationsTitle')}</p>
-            <p className="text-xs text-text-secondary">{t('members.invitationsSubtitle')}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabla */}
-      <div className="border-t border-border">
-        {isLoading ? (
-          <LoadingState />
-        ) : invitations.length === 0 ? (
-          <div className="py-8">
-            <EmptyState icon={Mail} title={t('members.inviteEmptyTitle')} subtitle={t('members.inviteEmptySubtitle')} />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px]">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-text-disabled">{t('common.email')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-disabled">{t('common.role')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-disabled hidden sm:table-cell">{t('common.date')}</th>
-                  <th className="px-4 py-3 w-12" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {invitations.map(inv => (
-                  <tr key={inv.id} className="hover:bg-grey-50/40 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-lg bg-grey-100 flex items-center justify-center shrink-0">
-                          <Mail size={13} className="text-text-secondary" strokeWidth={1.6} />
-                        </div>
-                        <span className="text-sm font-medium text-text-primary truncate">{inv.email}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <RoleBadge role={inv.role} label={roleDisplayName(t, inv.role, inv.customRoleName)} />
-                    </td>
-                    <td className="px-4 py-3.5 hidden sm:table-cell">
-                      <span className="text-xs text-text-secondary whitespace-nowrap">
-                        {t('members.expires', { date: new Date(inv.expiresAt).toLocaleDateString() })}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <Button
-                        variant="ghost" size="icon"
-                        onClick={() => revoke.mutate(inv.id)}
-                        loading={revoke.isPending && revoke.variables === inv.id}
-                        title={t('members.revoke')}
-                        className="h-7 w-7 text-text-disabled hover:text-error"
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </Card>
-  )
-}
-
-// Section 3: role management
+// Section 2: role management
 
 const ROLE_DEFS: { role: Exclude<OrgRole, 'custom'>; icon: React.ElementType; color: string; bg: string }[] = [
   { role: 'owner',   icon: ShieldCheck, color: 'text-amber-500',      bg: 'bg-amber-500/10' },
@@ -691,12 +611,11 @@ function RolesSection({ customRoles }: { customRoles: CustomRole[] }) {
 
 export function MembersPage() {
   const { t } = useTranslation()
-  const [showInvite, setShowInvite] = useState(false)
+  const [showCreateUser, setShowCreateUser] = useState(false)
   const session = useAuthStore(s => s.session)
   const orgId = session?.org?.id ?? ''
   const currentRole = (session?.org?.role ?? 'viewer') as OrgRole
   const { can } = usePermissions()
-  const canInvite = can('members:invite')
   const canManage = can('members:manage')
 
   const canUseCustomRoles = canManage
@@ -712,9 +631,9 @@ export function MembersPage() {
       <PageHeader
         title={t('members.title')}
         subtitle={t('members.subtitle')}
-        action={canInvite && (
-          <Button onClick={() => setShowInvite(true)}>
-            <UserPlus size={14} />{t('members.addInvite')}
+        action={canManage && (
+          <Button onClick={() => setShowCreateUser(true)}>
+            <UserPlus size={14} />{t('members.addUser')}
           </Button>
         )}
       />
@@ -727,11 +646,6 @@ export function MembersPage() {
         customRoles={customRoles}
       />
 
-      {/* 2. Invitations for admins and owners. */}
-      {canInvite && (
-        <InvitationsSection orgId={orgId} />
-      )}
-
       {canManage && (
         <>
           <SectionDivider label={t('members.rolesTitle')} />
@@ -741,17 +655,17 @@ export function MembersPage() {
 
       {/* Modal */}
       <Dialog
-        open={showInvite}
-        onClose={() => setShowInvite(false)}
-        title={t('members.inviteDialogTitle')}
-        description={t('members.inviteDialogSubtitle')}
+        open={showCreateUser}
+        onClose={() => setShowCreateUser(false)}
+        title={t('members.createDialogTitle')}
+        description={t('members.createDialogSubtitle')}
       >
-        <InviteModal
+        <CreateUserModal
           orgId={orgId}
           customRoles={customRoles}
           canManageRoles={canManage}
           customRolesFeatureEnabled={canUseCustomRoles}
-          onClose={() => setShowInvite(false)}
+          onClose={() => setShowCreateUser(false)}
         />
       </Dialog>
     </div>

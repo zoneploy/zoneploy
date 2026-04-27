@@ -11,7 +11,7 @@ export type Permission =
   | 'containers:read'  | 'containers:write'    | 'containers:deploy' | 'containers:terminal'
   | 'stacks:read'      | 'stacks:write'        | 'stacks:deploy'     | 'stacks:terminal'
   | 'servers:read'     | 'servers:connect'     | 'servers:terminal'
-  | 'members:read'     | 'members:invite'      | 'members:manage'
+  | 'members:read'     | 'members:manage'
   | 'organization:manage'
   | 'secrets:read'     | 'secrets:write'
   | 'audit:read'
@@ -24,7 +24,7 @@ export const CUSTOM_ROLE_PERMISSIONS = [
   'containers:read', 'containers:write', 'containers:deploy', 'containers:terminal',
   'stacks:read', 'stacks:write', 'stacks:deploy', 'stacks:terminal',
   'servers:read', 'servers:connect', 'servers:terminal',
-  'members:read', 'members:invite', 'members:manage',
+  'members:read', 'members:manage',
   'organization:manage',
   'secrets:read', 'secrets:write',
   'audit:read',
@@ -35,10 +35,6 @@ export type CustomRolePermission = typeof CUSTOM_ROLE_PERMISSIONS[number]
 export type UserStatus = 'active' | 'suspended'
 
 export type OrgStatus = 'active' | 'suspended' | 'deleted'
-
-export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked'
-
-export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing'
 
 export type ServerStatus = 'provisioning' | 'online' | 'offline' | 'error' | 'disconnecting' | 'updating'
 

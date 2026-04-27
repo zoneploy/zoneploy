@@ -7,7 +7,6 @@ import {
   boolean,
   timestamp,
   jsonb,
-  numeric,
   uniqueIndex,
   index,
 } from 'drizzle-orm/pg-core'
@@ -22,40 +21,14 @@ export const users = pgTable('users', {
   fullName: text('full_name').notNull(),
   avatarUrl: text('avatar_url'),
   status: text('status', { enum: ['active', 'suspended'] }).notNull().default('active'),
-  emailVerified: boolean('email_verified').notNull().default(false),
+  emailVerified: boolean('email_verified').notNull().default(true),
   isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
   totpSecret: text('totp_secret'),
   totpEnabled: boolean('totp_enabled').notNull().default(false),
+  deletedAt: timestamp('deleted_at'),
+  deletedByUserId: uuid('deleted_by_user_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
-})
-
-export const userAuthIdentities = pgTable(
-  'user_auth_identities',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    provider: text('provider', { enum: ['google', 'github'] }).notNull(),
-    providerUserId: text('provider_user_id').notNull(),
-    providerEmail: text('provider_email'),
-    providerEmailVerified: boolean('provider_email_verified').notNull().default(false),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
-  },
-  table => [
-    uniqueIndex('user_auth_identities_provider_user_idx').on(table.provider, table.providerUserId),
-    index('user_auth_identities_user_idx').on(table.userId),
-  ],
-)
-
-// EmailVerificationTokens
-
-export const emailVerificationTokens = pgTable('email_verification_tokens', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  tokenHash: text('token_hash').notNull().unique(),
-  expiresAt: timestamp('expires_at').notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
 // PasswordResetTokens
@@ -76,7 +49,6 @@ export const organizations = pgTable('organizations', {
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   ownerId: uuid('owner_id').notNull().references(() => users.id),
-  billingCountry: text('billing_country'),
   logoUrl: text('logo_url'),                           // Public URL of the optimized logo.
   logoKey: text('logo_key'),                           // Storage filename used for deletion.
   require2fa: boolean('require_2fa').notNull().default(false), // Force 2FA for members.
@@ -107,10 +79,6 @@ export const customRoles = pgTable(
 
 // RolePermissions
 // Permissions assigned to a custom role. Each row represents one permission, for example "containers:write".
-// Valid permissions: projects:read/create/update/delete, environments:read/create/update/delete/deploy,
-// containers:read/write/deploy/terminal, stacks:read/write/deploy/terminal,
-// servers:read/connect/terminal, members:read/invite/manage, organization:manage,
-// secrets:read/write, audit:read. Billing permissions are owner-only built-in permissions.
 
 export const rolePermissions = pgTable(
   'role_permissions',
@@ -142,86 +110,6 @@ export const orgMembers = pgTable(
   table => [
     uniqueIndex('org_members_org_user_idx').on(table.orgId, table.userId),
     index('org_members_org_idx').on(table.orgId),
-  ],
-)
-
-// OrgInvitations
-
-export const orgInvitations = pgTable('org_invitations', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull().references(() => organizations.id),
-  invitedByUserId: uuid('invited_by_user_id').notNull().references(() => users.id),
-  email: text('email').notNull(),
-  role: text('role', { enum: ['admin', 'member', 'viewer', 'custom'] }).notNull(),
-  customRoleId: uuid('custom_role_id').references(() => customRoles.id, { onDelete: 'set null' }),
-  token: text('token').notNull().unique(),
-  status: text('status', {
-    enum: ['pending', 'accepted', 'expired', 'revoked'],
-  }).notNull().default('pending'),
-  expiresAt: timestamp('expires_at').notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-})
-
-// Plans
-
-export const plans = pgTable('plans', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
-  features: jsonb('features').$type<string[]>().notNull().default([]),
-  maxServers: integer('max_servers').notNull(), // -1 means unlimited.
-  maxDeployments: integer('max_containers').notNull().default(-1), // containers + stacks
-  maxSubdomains: integer('max_subdomains').notNull().default(-1),
-  maxCustomDomains: integer('max_custom_domains').notNull().default(-1),
-  maxInstalledAddOns: integer('max_installed_add_ons').notNull().default(-1),
-  priceMonthlyUsd: numeric('price_monthly_usd', { precision: 10, scale: 2 }).notNull(),
-  isActive: boolean('is_active').notNull().default(true),
-  sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-})
-
-// Subscriptions
-
-export const subscriptions = pgTable('subscriptions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull().references(() => organizations.id),
-  planId: uuid('plan_id').notNull().references(() => plans.id),
-  status: text('status', {
-    enum: ['active', 'past_due', 'canceled', 'trialing'],
-  }).notNull().default('active'),
-  billingProvider: text('billing_provider', { enum: ['stripe', 'mercadopago'] }),
-  currentPeriodStart: timestamp('current_period_start').notNull(),
-  currentPeriodEnd: timestamp('current_period_end').notNull(),
-  canceledAt: timestamp('canceled_at'),
-  externalCustomerId: text('external_customer_id'),
-  externalSubscriptionId: text('external_subscription_id'),
-  externalPriceId: text('external_price_id'),
-  externalStatus: text('external_status'),
-  paymentFailureAt: timestamp('payment_failure_at'),
-  gracePeriodStartedAt: timestamp('grace_period_started_at'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-})
-
-export const billingEvents = pgTable(
-  'billing_events',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    provider: text('provider', { enum: ['stripe', 'mercadopago'] }).notNull(),
-    eventId: text('event_id').notNull(),
-    eventType: text('event_type').notNull(),
-    orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'set null' }),
-    subscriptionId: uuid('subscription_id').references(() => subscriptions.id, { onDelete: 'set null' }),
-    status: text('status', { enum: ['received', 'processed', 'ignored', 'failed'] }).notNull().default('received'),
-    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
-    errorMessage: text('error_message'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    processedAt: timestamp('processed_at'),
-  },
-  table => [
-    uniqueIndex('billing_events_provider_event_idx').on(table.provider, table.eventId),
-    index('billing_events_org_idx').on(table.orgId),
-    index('billing_events_subscription_idx').on(table.subscriptionId),
   ],
 )
 
@@ -304,7 +192,7 @@ export const auditLogs = pgTable(
     actorId: uuid('actor_id').notNull(),
     actorEmail: text('actor_email').notNull(),
     actorName: text('actor_name').notNull(),
-    // Action: 'member.invited' | 'member.role_changed' | 'container.created' | etc.
+    // Action: 'member.created' | 'member.role_changed' | 'container.created' | etc.
     action: text('action').notNull(),
     // Affected resource snapshot.
     resourceType: text('resource_type').notNull(), // 'member' | 'container' | 'project' | etc.
@@ -645,21 +533,6 @@ export const addOns = pgTable('add_ons', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
-// PlanAddOns
-
-export const planAddOns = pgTable(
-  'plan_add_ons',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    planId: uuid('plan_id').notNull().references(() => plans.id),
-    addOnId: uuid('add_on_id').notNull().references(() => addOns.id),
-    limits: jsonb('limits').notNull().default({}),
-  },
-  table => [
-    uniqueIndex('plan_add_ons_plan_addon_idx').on(table.planId, table.addOnId),
-  ],
-)
-
 // Server Add-On Installations & Bindings
 
 export const serverAddOnInstallations = pgTable(
@@ -760,7 +633,6 @@ export const NOTIFICATION_TYPES = [
   'deploy_success',
   'deploy_failed',
   'member_joined',
-  'member_invited',
   'addon_expiring',
 ] as const
 

@@ -1,24 +1,21 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
   Server, Box, Users, Building2, ArrowRight,
-  UserPlus, Rocket, FolderOpen, AlertTriangle, Zap,
+  Rocket, FolderOpen, AlertTriangle, Zap,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useAuthStore } from '@/stores/auth'
-import { authApi } from '@/api/auth'
-import { membersApi, invitationsApi } from '@/api/members'
+import { membersApi } from '@/api/members'
 import { serversApi } from '@/api/servers'
 import { containersApi } from '@/api/containers'
 import { projectsApi } from '@/api/projects'
 import { stacksApi } from '@/api/stacks'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { cn } from '@/lib/utils'
-import type { OrgRole } from '@zoneploy/types'
 
 // Stat card
 
@@ -65,100 +62,15 @@ function StatCard({
 
 function NoOrgDashboard() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const session = useAuthStore(s => s.session)
-  const accessToken = useAuthStore(s => s.accessToken)
-  const setSession = useAuthStore(s => s.setSession)
   const firstName = session?.user?.fullName?.split(' ')[0]
-
-  const [acceptingToken, setAcceptingToken] = useState<string | null>(null)
-
-  const { data: invitations = [], isLoading } = useQuery({
-    queryKey: ['pending-invitations'],
-    queryFn: authApi.pendingInvitations,
-  })
-
-  const accept = useMutation({
-    mutationFn: (token: string) => {
-      setAcceptingToken(token)
-      return invitationsApi.accept(token)
-    },
-    onSuccess: (result) => {
-      const updated = {
-        ...session!,
-        org: {
-          id: result.orgId,
-          name: result.orgName,
-          slug: result.orgSlug,
-          logoUrl: null as string | null,
-          role: result.role as OrgRole,
-          customRoleId: result.customRoleId,
-          permissions: result.permissions,
-          require2fa: false,
-        },
-      }
-      setSession(accessToken!, updated)
-      queryClient.clear()
-      navigate('/projects', { replace: true })
-    },
-    onSettled: () => setAcceptingToken(null),
-  })
 
   return (
     <div className="space-y-6 w-full">
       <PageHeader
-        title={`${t('dashboard.welcome', { name: firstName })} 👋`}
+        title={`${t('dashboard.welcome', { name: firstName })}`}
         subtitle={t('dashboard.noOrgSubtitle')}
       />
-
-      {/* Pending invitations. */}
-      {!isLoading && invitations.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-bold uppercase tracking-widest text-text-secondary">
-            {t('dashboard.pendingInvitations')}
-          </p>
-          {invitations.map(inv => (
-            <div
-              key={inv.id}
-              className="flex items-center gap-4 rounded-2xl border border-grey-100 bg-background-paper px-5 py-4"
-            >
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <UserPlus size={17} className="text-primary" strokeWidth={1.6} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-text-primary truncate">{inv.orgName}</p>
-                <p className="text-xs text-text-secondary mt-0.5">
-                  {t('dashboard.invitedBy', { name: inv.invitedByName })}
-                  {' · '}
-                  <span>{inv.role === 'custom' ? inv.customRoleName || t('members.roles.custom') : t(`members.roles.${inv.role}`, { defaultValue: inv.role })}</span>
-                </p>
-              </div>
-              <Button
-                size="sm"
-                loading={acceptingToken === inv.token}
-                disabled={acceptingToken !== null && acceptingToken !== inv.token}
-                onClick={() => accept.mutate(inv.token)}
-              >
-                {t('invitation.accept')}
-                <ArrowRight size={13} />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Separador */}
-      {!isLoading && invitations.length > 0 && (
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-grey-100" />
-          </div>
-          <div className="relative flex justify-center">
-            <span className="bg-background px-3 text-xs text-text-secondary">{t('common.or')}</span>
-          </div>
-        </div>
-      )}
 
       <Card>
         <EmptyState
@@ -170,7 +82,6 @@ function NoOrgDashboard() {
     </div>
   )
 }
-
 // Main dashboard with org
 
 export function DashboardPage() {

@@ -5,7 +5,7 @@ import { authApi } from '@/api/auth'
 import { organizationsApi } from '@/api/organizations'
 import { toSessionContext } from '@/lib/auth-session'
 import { useAuthStore } from '@/stores/auth'
-import type { AuthResponseSuccess, RegisterResponse } from '@zoneploy/types'
+import type { AuthResponseSuccess } from '@zoneploy/types'
 import type { RegisterInput, LoginInput } from '@zoneploy/types'
 
 export function getPostLoginPath(data: {
@@ -51,23 +51,6 @@ export function useLogin() {
 
       // If the org requires 2FA and user does not have it yet, redirect to setup.
       navigate(getPostLoginPath(successData))
-    },
-  })
-}
-
-export function useRegister() {
-  const navigate = useNavigate()
-  const { i18n } = useTranslation()
-
-  return useMutation<RegisterResponse, unknown, Omit<RegisterInput, 'lang'>>({
-    mutationFn: (input: Omit<RegisterInput, 'lang'>) =>
-      authApi.register({ ...input, lang: i18n.language?.startsWith('en') ? 'en' : 'es' }),
-    onSuccess: data => {
-      const params = new URLSearchParams({ email: data.email })
-      if (data.requiresEmailVerification) {
-        params.set('verification', 'pending')
-      }
-      navigate(`/login?${params.toString()}`, { replace: true })
     },
   })
 }

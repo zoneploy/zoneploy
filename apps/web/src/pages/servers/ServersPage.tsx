@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import AnsiToHtml from 'ansi-to-html'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Cpu,
@@ -7,7 +6,6 @@ import {
   Loader,
   MemoryStick,
   RefreshCw,
-  ScrollText,
   Server,
   ShieldCheck,
   TerminalSquare,
@@ -29,136 +27,9 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { serversApi, type AgentAuditReport, type AgentAuditStatus, type ServerDockerCleanupResult, type ServerItem } from '@/api/servers'
 import { useAuthStore } from '@/stores/auth'
 import { usePermissions } from '@/hooks/usePermissions'
-import { tryRefreshToken } from '@/lib/api-client'
 import { useMetricsStream } from '@/hooks/useMetricsStream'
 import { useServerMetricsLive } from '@/hooks/useServerMetricsLive'
 import { getApiError } from '@/lib/errors'
-
-const ansiConverter = new AnsiToHtml({ escapeXML: true, newline: true })
-
-interface ProvisionLogEntry {
-  type: 'step' | 'line'
-  ok: boolean
-  step?: string
-  message?: string
-  stream?: 'stdout' | 'stderr'
-  error?: string
-  ts: string
-}
-
-function ProvisionLogStream({
-  orgId,
-  serverId,
-}: {
-  orgId: string
-  serverId: string
-}) {
-  const { t } = useTranslation()
-  const [entries, setEntries] = useState<ProvisionLogEntry[]>([])
-  const [done, setDone] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const url = serversApi.provisionLogsUrl(orgId, serverId)
-    const controller = new AbortController()
-
-    const connect = async () => {
-      try {
-        let token = useAuthStore.getState().accessToken
-        let res = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        })
-
-        if (res.status === 401) {
-          token = await tryRefreshToken()
-          if (!token) return
-          res = await fetch(url, {
-            headers: { Authorization: `Bearer ${token}` },
-            signal: controller.signal,
-          })
-        }
-
-        if (!res.ok || !res.body) return
-
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-
-        while (true) {
-          const { done: streamDone, value } = await reader.read()
-          if (streamDone) break
-          buffer += decoder.decode(value, { stream: true })
-          const parts = buffer.split('\n\n')
-          buffer = parts.pop() ?? ''
-          for (const part of parts) {
-            if (part.startsWith('event: done')) {
-              setDone(true)
-              return
-            }
-            if (!part.startsWith('data: ')) continue
-            try {
-              const entry = JSON.parse(part.slice(6)) as ProvisionLogEntry
-              setEntries(prev => [...prev, entry])
-            } catch {
-              // Ignore malformed SSE chunks.
-            }
-          }
-        }
-        setDone(true)
-      } catch {
-        // Ignore transient stream failures.
-      }
-    }
-
-    connect()
-    return () => controller.abort()
-  }, [orgId, serverId])
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [entries])
-
-  return (
-    <div className="h-64 overflow-y-auto rounded-lg bg-[#0a0f14] p-3 space-y-1.5">
-      {entries.length === 0 ? (
-        <div className="flex items-center gap-2 text-xs font-mono text-text-secondary">
-          {done ? (
-            <>
-              <ScrollText size={12} />
-              <span>{t('servers.provisionLogsEmpty')}</span>
-            </>
-          ) : (
-            <>
-              <Loader size={12} className="animate-spin" />
-              <span>{t('common.loading')}</span>
-            </>
-          )}
-        </div>
-      ) : (
-        entries.map((entry, index) => (
-          <div key={index} className="flex items-start gap-2 text-xs font-mono">
-            <ScrollText
-              size={12}
-              className={`${entry.stream === 'stderr' ? 'text-amber-400' : 'text-sky-300'} mt-0.5 shrink-0`}
-            />
-            <span
-              className={`whitespace-pre-wrap break-all ${entry.stream === 'stderr' ? 'text-amber-300' : 'text-slate-200'}`}
-              dangerouslySetInnerHTML={{ __html: ansiConverter.toHtml(entry.message ?? entry.step ?? entry.error ?? '') }}
-            />
-          </div>
-        ))
-      )}
-      {!done && entries.length > 0 && (
-        <div className="flex items-center gap-1.5 text-xs font-mono text-amber-400">
-          <Loader size={10} className="animate-spin" />
-          <span>{t('servers.provisioning')}</span>
-        </div>
-      )}
-      <div ref={bottomRef} />
-    </div>
-  )
-}
 
 function ServerTerminal({
   orgId,
@@ -582,7 +453,6 @@ function ServerCard({
   const queryClient = useQueryClient()
   const runtimeAvailable = server.status === 'online' || server.agentMode === 'self_hosted'
   const liveMetrics = useServerMetricsLive(orgId, server.id, runtimeAvailable)
-  const [showProvisionLogs, setShowProvisionLogs] = useState(false)
   const [showTerminal, setShowTerminal] = useState(false)
   const [showAudit, setShowAudit] = useState(false)
   const [showCleanup, setShowCleanup] = useState(false)
@@ -713,36 +583,7 @@ function ServerCard({
             </div>
           )}
         </div>
-
-        <div className="flex items-center justify-end border-t border-grey-100 px-4 py-2">
-          <button
-            onClick={() => setShowProvisionLogs(true)}
-            className="flex items-center gap-1 text-xs text-text-secondary transition-colors hover:text-text-primary"
-          >
-            <ScrollText size={11} />
-            {t('servers.viewProvisionLogs')}
-          </button>
-        </div>
       </div>
-
-      {showProvisionLogs && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowProvisionLogs(false)}>
-          <div
-            className="w-full max-w-lg overflow-hidden rounded-xl border border-grey-100 bg-background shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-grey-100 px-4 py-3">
-              <span className="text-sm font-medium text-text-primary">{t('servers.provisionLogsTitle')}</span>
-              <button onClick={() => setShowProvisionLogs(false)} className="text-text-secondary hover:text-text-primary">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="p-4">
-              <ProvisionLogStream orgId={orgId} serverId={server.id} />
-            </div>
-          </div>
-        </div>
-      )}
 
       {showTerminal && (
         <ServerTerminal orgId={orgId} server={server} onClose={() => setShowTerminal(false)} />

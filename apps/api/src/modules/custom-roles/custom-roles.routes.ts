@@ -9,7 +9,7 @@ import { AppError } from '../../lib/errors.js'
 import { audit } from '../../lib/audit.js'
 
 export async function customRoleRoutes(app: FastifyInstance) {
-  const canViewRoles = authorize.any(['members:read', 'members:invite', 'members:manage'])
+  const canViewRoles = authorize.any(['members:read', 'members:manage'])
 
   app.get('/', { preHandler: [authenticate, canViewRoles] }, async (request, reply) => {
     const { orgId } = request.params as { orgId: string }

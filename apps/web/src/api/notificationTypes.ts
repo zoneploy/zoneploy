@@ -10,7 +10,6 @@ export const NOTIFICATION_TYPES = [
   'deploy_success',
   'deploy_failed',
   'member_joined',
-  'member_invited',
   'addon_expiring',
 ] as const
 

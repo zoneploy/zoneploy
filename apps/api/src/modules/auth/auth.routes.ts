@@ -1,8 +1,7 @@
-import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
+﻿import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
 import type { AuthResponseMfaRequired, AuthSessionResponse } from '@zoneploy/types'
 import { RegisterSchema, LoginSchema } from '@zoneploy/types'
-import { register, setupOwner, getSetupStatus, login, loginByUserId, refresh, logout, getMe, verifyEmail, resendVerification, getPendingInvitations, completeMfaWebauthn, completeMfaTotp, listSessions, revokeSession, revokeOtherSessions } from './auth.service.js'
-import { exchangeOAuthLogin, getOAuthAuthorizationUrl, type OAuthProvider } from './oauth.service.js'
+import { setupOwner, getSetupStatus, login, loginByUserId, refresh, logout, getMe, completeMfaWebauthn, completeMfaTotp, listSessions, revokeSession, revokeOtherSessions } from './auth.service.js'
 import { updateProfile, changePassword, setupTotp, verifyAndEnableTotp, disableTotp, getTotpStatus } from './profile.service.js'
 import { requestPasswordReset, verifyResetCode, confirmPasswordReset } from './reset.service.js'
 import { getRegistrationOptions, verifyAndSavePasskey, listPasskeys, deletePasskey, getAuthenticationOptions, verifyAuthentication } from './webauthn.service.js'
@@ -19,12 +18,7 @@ function getClientCtx(request: import('fastify').FastifyRequest) {
   return { ip, userAgent }
 }
 
-function parseOAuthProvider(provider: string): OAuthProvider | null {
-  return provider === 'google' || provider === 'github' ? provider : null
-}
-
 const defaultDeps = {
-  register,
   setupOwner,
   getSetupStatus,
   login,
@@ -32,16 +26,11 @@ const defaultDeps = {
   refresh,
   logout,
   getMe,
-  verifyEmail,
-  resendVerification,
-  getPendingInvitations,
   completeMfaWebauthn,
   completeMfaTotp,
   listSessions,
   revokeSession,
   revokeOtherSessions,
-  exchangeOAuthLogin,
-  getOAuthAuthorizationUrl,
   updateProfile,
   changePassword,
   setupTotp,
@@ -92,7 +81,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
     const input = RegisterSchema.safeParse(request.body)
     if (!input.success) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos invÃ¡lidos' },
+        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos invÃƒÂ¡lidos' },
       })
     }
 
@@ -107,32 +96,12 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
     }
   })
 
-  // POST /auth/register
-  app.post('/register', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request, reply) => {
-    const input = RegisterSchema.safeParse(request.body)
-    if (!input.success) {
-      return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' },
-      })
-    }
-
-    try {
-      const result = await deps.register(input.data)
-      return reply.status(201).send(result)
-    } catch (err) {
-      if (err instanceof AppError) {
-        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
-      }
-      throw err
-    }
-  })
-
   // POST /auth/login
   app.post('/login', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const input = LoginSchema.safeParse(request.body)
     if (!input.success) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'Email o contraseña inválidos' },
+        error: { code: 'VALIDATION_ERROR', message: 'Email o contraseÃ±a invÃ¡lidos' },
       })
     }
 
@@ -140,97 +109,6 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
       const result = await deps.login(input.data, getClientCtx(request)) as AuthResponseMfaRequired | AuthSessionPayload
       if (!hasRefreshToken(result)) return reply.send(result)
       return replyWithAuthSession(request, reply, result)
-    } catch (err) {
-      if (err instanceof AppError) {
-        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
-      }
-      throw err
-    }
-  })
-
-  app.get('/oauth/:provider/authorize', { config: { rateLimit: { max: 20, timeWindow: '15 minutes' } } }, async (_request, reply) => {
-    const oauthLoginDisabled = true as boolean
-    if (oauthLoginDisabled) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'OAuth login is disabled' } })
-
-    const { provider: rawProvider } = _request.params as { provider: string }
-    const provider = parseOAuthProvider(rawProvider)
-    const { state } = (_request.query ?? {}) as { state?: string }
-
-    if (!provider || !state?.trim()) {
-      return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'Provider o state inválido' },
-      })
-    }
-
-    try {
-      const result = deps.getOAuthAuthorizationUrl(provider, state)
-      return reply.send(result)
-    } catch (err) {
-      if (err instanceof AppError) {
-        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
-      }
-      throw err
-    }
-  })
-
-  app.post('/oauth/:provider/exchange', { config: { rateLimit: { max: 20, timeWindow: '15 minutes' } } }, async (_request, reply) => {
-    const oauthLoginDisabled = true as boolean
-    if (oauthLoginDisabled) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'OAuth login is disabled' } })
-
-    const { provider: rawProvider } = _request.params as { provider: string }
-    const provider = parseOAuthProvider(rawProvider)
-    const { code } = (_request.body ?? {}) as { code?: string }
-
-    if (!provider || !code?.trim()) {
-      return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'Provider o code inválido' },
-      })
-    }
-
-    try {
-      const result = await deps.exchangeOAuthLogin(provider, code, getClientCtx(_request))
-      if (!hasRefreshToken(result)) return reply.send(result)
-      return replyWithAuthSession(_request, reply, result)
-    } catch (err) {
-      if (err instanceof AppError) {
-        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
-      }
-      throw err
-    }
-  })
-
-  // POST /auth/verify-email
-  app.post('/verify-email', async (request, reply) => {
-    const { token } = request.body as { token?: string }
-
-    if (!token) {
-      return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'Token requerido' },
-      })
-    }
-
-    try {
-      const result = await deps.verifyEmail(token)
-      return reply.send(result)
-    } catch (err) {
-      if (err instanceof AppError) {
-        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
-      }
-      throw err
-    }
-  })
-
-  // POST /auth/resend-verification
-  app.post('/resend-verification', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request, reply) => {
-    const { email, lang } = (request.body ?? {}) as { email?: string; lang?: 'es' | 'en' }
-    if (!email) {
-      return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'Email requerido' },
-      })
-    }
-    try {
-      const result = await deps.resendVerification(email, lang)
-      return reply.send(result)
     } catch (err) {
       if (err instanceof AppError) {
         return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
@@ -305,19 +183,6 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
     }
   })
 
-  // GET /auth/invitations/pending
-  app.get('/invitations/pending', { preHandler: [authenticate] }, async (request, reply) => {
-    try {
-      const invitations = await deps.getPendingInvitations(request.userEmail)
-      return reply.send(invitations)
-    } catch (err) {
-      if (err instanceof AppError) {
-        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
-      }
-      throw err
-    }
-  })
-
   // GET /auth/profile/2fa/status
   app.get('/profile/2fa/status', { preHandler: [authenticate] }, async (request, reply) => {
     try {
@@ -369,7 +234,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // POST /auth/profile/2fa/totp/verify
   app.post('/profile/2fa/totp/verify', { preHandler: [authenticate] }, async (request, reply) => {
     const { code } = request.body as { code?: string }
-    if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Código requerido' } })
+    if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'CÃ³digo requerido' } })
     try {
       const result = await deps.verifyAndEnableTotp(request.userId, code)
       return reply.send(result)
@@ -382,7 +247,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // POST /auth/profile/2fa/totp/disable
   app.post('/profile/2fa/totp/disable', { preHandler: [authenticate] }, async (request, reply) => {
     const { code } = request.body as { code?: string }
-    if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Código requerido' } })
+    if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'CÃ³digo requerido' } })
     try {
       const result = await deps.disableTotp(request.userId, code)
       return reply.send(result)
@@ -576,7 +441,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // DELETE /auth/sessions: revoke all sessions except the current one.
   app.delete('/sessions', { preHandler: [authenticate] }, async (request, reply) => {
     if (!request.sessionId) {
-      return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'Sesión actual no identificada' } })
+      return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'SesiÃ³n actual no identificada' } })
     }
     try {
       const result = await deps.revokeOtherSessions(request.userId, request.sessionId)

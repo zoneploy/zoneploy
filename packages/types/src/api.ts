@@ -47,19 +47,6 @@ export interface AuthResponseSuccess extends AuthSessionResponse {
   requiresMfa?: false
 }
 
-// Registration response when email verification is still required.
-export interface RegisterResponsePendingVerification {
-  ok: true
-  requiresEmailVerification: true
-  email: string
-}
-
-export interface RegisterResponseReady {
-  ok: true
-  requiresEmailVerification: false
-  email: string
-}
-
 // Respuesta de login que requiere MFA
 export interface AuthResponseMfaRequired {
   requiresMfa: true
@@ -104,4 +91,3 @@ export interface SessionContext {
 
 // Backward-compatible aliases.
 export type LoginResponse = AuthResponse
-export type RegisterResponse = RegisterResponsePendingVerification | RegisterResponseReady

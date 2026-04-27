@@ -31,14 +31,11 @@ function DashboardRoute() {
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { SetupOwnerPage } from '@/pages/auth/SetupOwnerPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
-import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
 import { TermsPage } from '@/pages/legal/TermsPage'
 import { PrivacyPage } from '@/pages/legal/PrivacyPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
 import { OrgSettingsPage } from '@/pages/organization/OrgSettingsPage'
 import { MembersPage } from '@/pages/members/MembersPage'
-import { AcceptInvitationPage } from '@/pages/invitations/AcceptInvitationPage'
-import { MyInvitationsPage } from '@/pages/invitations/MyInvitationsPage'
 import { ServersPage } from '@/pages/servers/ServersPage'
 import { ContainersPage } from '@/pages/containers/ContainersPage'
 import { ContainerDetailPage } from '@/pages/containers/ContainerDetailPage'
@@ -69,8 +66,6 @@ export const router = createBrowserRouter([
   },
 
   // Public routes, always accessible.
-  { path: '/verify-email',  element: <VerifyEmailPage /> },
-  { path: '/invite/:token', element: <AcceptInvitationPage /> },
   { path: '/terms',         element: <TermsPage /> },
   { path: '/privacy',       element: <PrivacyPage /> },
   { path: '/docs',          element: <ExternalRedirect to={DOCS_URL} /> },
@@ -228,14 +223,6 @@ export const router = createBrowserRouter([
             handle: {
               title: 'nav.settings',
               crumbs: [{ label: 'nav.organization' }, { label: 'nav.settings' }],
-            },
-          },
-          {
-            path: 'invitations',
-            element: <MyInvitationsPage />,
-            handle: {
-              title: 'invitations.myTitle',
-              crumbs: [{ label: 'invitations.myTitle' }],
             },
           },
           {

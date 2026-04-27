@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs'
+﻿import bcrypt from 'bcryptjs'
 import { eq, and, ne, gte, desc } from 'drizzle-orm'
 import { nanoid } from 'nanoid'
 import { createHash, randomUUID } from 'node:crypto'
@@ -7,15 +7,11 @@ import {
   users,
   organizations,
   orgMembers,
-  orgInvitations,
-  customRoles,
   refreshTokens,
-  emailVerificationTokens,
   passkeys,
 } from '../../db/schema.js'
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt.js'
-import { AppError, ConflictError, NotFoundError, UnauthorizedError, InvalidCredentialsError, BadRequestError, ForbiddenError } from '../../lib/errors.js'
-import { sendMail, verificationEmail } from '../../lib/mailer.js'
+import { AppError, ConflictError, NotFoundError, UnauthorizedError, InvalidCredentialsError } from '../../lib/errors.js'
 import { config } from '../../config.js'
 import { redis, REDIS_KEYS } from '../../lib/redis.js'
 import type { RegisterInput, LoginInput } from '@zoneploy/types'
@@ -105,31 +101,6 @@ async function rememberRefreshTokenGrace(tokenHash: string, sessionId: string) {
     .catch(() => null)
 }
 
-async function createVerificationToken(userId: string): Promise<string> {
-  // Delete previous tokens.
-  await db
-    .delete(emailVerificationTokens)
-    .where(eq(emailVerificationTokens.userId, userId))
-
-  const rawToken = nanoid(48)
-  const expiresAt = new Date()
-  expiresAt.setHours(expiresAt.getHours() + 24) // 24 horas
-
-  await db.insert(emailVerificationTokens).values({
-    userId,
-    tokenHash: hashToken(rawToken),
-    expiresAt,
-  })
-
-  return rawToken
-}
-
-function ensureEmailVerified(emailVerified: boolean) {
-  if (!emailVerified) {
-    throw new UnauthorizedError('Verificá tu email antes de continuar', 'EMAIL_NOT_VERIFIED')
-  }
-}
-
 // Services
 
 async function ownerConfigured() {
@@ -142,23 +113,7 @@ async function ownerConfigured() {
   return Boolean(owner)
 }
 
-async function hasPendingInvitation(email: string) {
-  const [invitation] = await db
-    .select({ id: orgInvitations.id })
-    .from(orgInvitations)
-    .where(
-      and(
-        eq(orgInvitations.email, email),
-        eq(orgInvitations.status, 'pending'),
-        gte(orgInvitations.expiresAt, new Date()),
-      ),
-    )
-    .limit(1)
-
-  return Boolean(invitation)
-}
-
-async function createUserAccount(input: RegisterInput, emailVerified: boolean) {
+async function createUserAccount(input: RegisterInput) {
   const [existing] = await db
     .select({ id: users.id })
     .from(users)
@@ -166,7 +121,7 @@ async function createUserAccount(input: RegisterInput, emailVerified: boolean) {
     .limit(1)
 
   if (existing) {
-    throw new ConflictError('El email ya estÃ¡ registrado')
+    throw new ConflictError('El email ya estÃƒÂ¡ registrado')
   }
 
   const passwordHash = await bcrypt.hash(input.password, 12)
@@ -177,7 +132,7 @@ async function createUserAccount(input: RegisterInput, emailVerified: boolean) {
       email: input.email,
       passwordHash,
       fullName: input.fullName,
-      emailVerified,
+      emailVerified: true,
     })
     .returning()
 
@@ -188,7 +143,7 @@ async function createUserAccount(input: RegisterInput, emailVerified: boolean) {
     type: 'welcome',
     data: { name: user.fullName, lang: input.lang ?? 'es' },
     link: '/notifications',
-  }).catch(err => console.error('Error creando notificaciÃ³n de bienvenida:', err))
+  }).catch(err => console.error('Error creando notificaciÃƒÂ³n de bienvenida:', err))
 
   return user
 }
@@ -206,83 +161,10 @@ export async function setupOwner(input: RegisterInput, ctx?: SessionContext) {
     throw new ConflictError('La instancia ya tiene un owner configurado', 'OWNER_ALREADY_CONFIGURED')
   }
 
-  const user = await createUserAccount(input, true)
+  const user = await createUserAccount(input)
   await createOrg(user.id, 'Zoneploy Workspace')
 
   return login({ email: input.email, password: input.password }, ctx)
-}
-
-export async function register(input: RegisterInput) {
-  if (!await ownerConfigured()) {
-    throw new BadRequestError('Primero configurÃ¡ el owner de esta instancia self-hosted', 'OWNER_SETUP_REQUIRED')
-  }
-
-  if (!await hasPendingInvitation(input.email)) {
-    throw new ForbiddenError('El registro pÃºblico estÃ¡ deshabilitado. PedÃ­ una invitaciÃ³n al owner.', 'REGISTRATION_DISABLED')
-  }
-
-  // 1. Verificar que el email no exista
-  const [existing] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, input.email))
-    .limit(1)
-
-  const [existingUser] = await db
-    .select({ id: users.id })
-    .from(users)
-    .limit(1)
-
-  if (existing) {
-    throw new ConflictError('El email ya está registrado')
-  }
-
-  const isBootstrapUser = !existingUser
-
-  // 2. Hash password.
-  const passwordHash = await bcrypt.hash(input.password, 12)
-
-  // 3. Create user without an organization.
-  const [user] = await db
-    .insert(users)
-    .values({
-      email: input.email,
-      passwordHash,
-      fullName: input.fullName,
-      emailVerified: isBootstrapUser,
-    })
-    .returning()
-
-  if (!user) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear usuario')
-
-  if (isBootstrapUser) {
-    await createOrg(user.id, 'Zoneploy Workspace')
-  }
-
-  // 4. Send verification email and welcome notification without blocking.
-  if (!isBootstrapUser) {
-    createVerificationToken(user.id)
-    .then(rawToken => {
-      const verifyUrl = `${config.APP_URL}/verify-email?token=${rawToken}`
-      const mail = verificationEmail({ fullName: user.fullName, verifyUrl, lang: input.lang })
-      return sendMail({ to: user.email, ...mail })
-    })
-    .catch(err => console.error('Error enviando email de verificación:', err))
-
-  }
-
-  createNotification({
-    userId: user.id,
-    type: 'welcome',
-    data: { name: user.fullName, lang: input.lang ?? 'es' },
-    link: '/notifications',
-  }).catch(err => console.error('Error creando notificación de bienvenida:', err))
-
-  return {
-    ok: true,
-    requiresEmailVerification: isBootstrapUser ? false : true,
-    email: user.email,
-  }
 }
 
 export async function login(input: LoginInput, ctx?: SessionContext) {
@@ -297,7 +179,7 @@ export async function login(input: LoginInput, ctx?: SessionContext) {
     throw new InvalidCredentialsError()
   }
 
-  if (user.status === 'suspended') {
+  if (user.status === 'suspended' || user.deletedAt) {
     throw new UnauthorizedError('Cuenta suspendida')
   }
 
@@ -307,7 +189,6 @@ export async function login(input: LoginInput, ctx?: SessionContext) {
     throw new InvalidCredentialsError()
   }
 
-  ensureEmailVerified(user.emailVerified)
 
   // 3. Check MFA hierarchy: Passkeys > TOTP.
   const [pk] = await db.select().from(passkeys).where(eq(passkeys.userId, user.id)).limit(1)
@@ -369,59 +250,12 @@ export async function login(input: LoginInput, ctx?: SessionContext) {
   }
 }
 
-export async function verifyEmail(token: string) {
-  const tokenHash = hashToken(token)
-
-  const [record] = await db
-    .select()
-    .from(emailVerificationTokens)
-    .where(eq(emailVerificationTokens.tokenHash, tokenHash))
-    .limit(1)
-
-  if (!record) {
-    throw new BadRequestError('Token de verificación inválido o expirado')
-  }
-
-  if (record.expiresAt < new Date()) {
-    await db.delete(emailVerificationTokens).where(eq(emailVerificationTokens.id, record.id))
-    throw new BadRequestError('El token de verificación expiró')
-  }
-
-  // Marcar email como verificado
-  await db
-    .update(users)
-    .set({ emailVerified: true, updatedAt: new Date() })
-    .where(eq(users.id, record.userId))
-
-  // Delete the consumed token.
-  await db.delete(emailVerificationTokens).where(eq(emailVerificationTokens.id, record.id))
-
-  return { ok: true }
-}
-
-export async function resendVerification(email: string, lang: 'es' | 'en' = 'es') {
-  const [user] = await db
-    .select({ id: users.id, emailVerified: users.emailVerified, fullName: users.fullName })
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1)
-
-  if (!user || user.emailVerified) return { ok: true }
-
-  const rawToken = await createVerificationToken(user.id)
-  const verifyUrl = `${config.APP_URL}/verify-email?token=${rawToken}`
-  const mail = verificationEmail({ fullName: user.fullName, verifyUrl, lang })
-  await sendMail({ to: email, ...mail })
-
-  return { ok: true }
-}
-
 export async function refresh(token: string) {
   let payload
   try {
     payload = verifyRefreshToken(token)
   } catch {
-    throw new UnauthorizedError('Refresh token inválido')
+    throw new UnauthorizedError('Refresh token invÃ¡lido')
   }
 
   const tokenHash = hashToken(token)
@@ -437,6 +271,7 @@ export async function refresh(token: string) {
       email: users.email,
       fullName: users.fullName,
       status: users.status,
+      deletedAt: users.deletedAt,
       avatarUrl: users.avatarUrl,
       emailVerified: users.emailVerified,
       totpEnabled: users.totpEnabled,
@@ -445,7 +280,7 @@ export async function refresh(token: string) {
     .where(eq(users.id, payload.sub))
     .limit(1)
 
-  if (!user || user.status === 'suspended') {
+  if (!user || user.status === 'suspended' || user.deletedAt) {
     throw new UnauthorizedError('Cuenta no disponible')
   }
 
@@ -511,42 +346,16 @@ export async function logout(token: string) {
   await redis.del(REDIS_KEYS.refreshTokenGrace(tokenHash)).catch(() => null)
 }
 
-export async function getPendingInvitations(email: string) {
-  return db
-    .select({
-      id: orgInvitations.id,
-      token: orgInvitations.token,
-      role: orgInvitations.role,
-      customRoleId: orgInvitations.customRoleId,
-      customRoleName: customRoles.name,
-      expiresAt: orgInvitations.expiresAt,
-      orgName: organizations.name,
-      invitedByName: users.fullName,
-    })
-    .from(orgInvitations)
-    .innerJoin(organizations, eq(organizations.id, orgInvitations.orgId))
-    .innerJoin(users, eq(users.id, orgInvitations.invitedByUserId))
-    .leftJoin(customRoles, eq(customRoles.id, orgInvitations.customRoleId))
-    .where(
-      and(
-        eq(orgInvitations.email, email),
-        eq(orgInvitations.status, 'pending'),
-      ),
-    )
-    .orderBy(orgInvitations.createdAt)
-}
-
 // Used by WebAuthn to generate tokens after passkey authentication.
 export async function loginByUserId(userId: string, ctx?: SessionContext) {
   const [user] = await db
-    .select({ id: users.id, email: users.email, status: users.status, fullName: users.fullName, avatarUrl: users.avatarUrl, emailVerified: users.emailVerified, totpEnabled: users.totpEnabled })
+    .select({ id: users.id, email: users.email, status: users.status, deletedAt: users.deletedAt, fullName: users.fullName, avatarUrl: users.avatarUrl, emailVerified: users.emailVerified, totpEnabled: users.totpEnabled })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
 
   if (!user) throw new NotFoundError('Usuario no encontrado')
-  if (user.status === 'suspended') throw new UnauthorizedError('Cuenta suspendida')
-  ensureEmailVerified(user.emailVerified)
+  if (user.status === 'suspended' || user.deletedAt) throw new UnauthorizedError('Cuenta suspendida')
 
   const [membership] = await db
     .select({ orgId: orgMembers.orgId, role: orgMembers.role, customRoleId: orgMembers.customRoleId })
@@ -639,7 +448,7 @@ export async function completeMfaTotp(userId: string, code: string, ctx?: Sessio
 
   if (!user?.totpSecret) throw new UnauthorizedError('TOTP no configurado')
   const valid = verifySync({ token: code, secret: user.totpSecret, strategy: 'totp' })
-  if (!valid) throw new UnauthorizedError('Código TOTP incorrecto')
+  if (!valid) throw new UnauthorizedError('CÃ³digo TOTP incorrecto')
 
   return await issueFinalTokens(userId, ctx)
 }
@@ -647,13 +456,13 @@ export async function completeMfaTotp(userId: string, code: string, ctx?: Sessio
 // Helper: generates final tokens after MFA verification.
 async function issueFinalTokens(userId: string, ctx?: SessionContext) {
   const [user] = await db
-    .select({ id: users.id, email: users.email, fullName: users.fullName, avatarUrl: users.avatarUrl, emailVerified: users.emailVerified, totpEnabled: users.totpEnabled })
+    .select({ id: users.id, email: users.email, status: users.status, deletedAt: users.deletedAt, fullName: users.fullName, avatarUrl: users.avatarUrl, emailVerified: users.emailVerified, totpEnabled: users.totpEnabled })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
 
   if (!user) throw new NotFoundError('Usuario no encontrado')
-  ensureEmailVerified(user.emailVerified)
+  if (user.status === 'suspended' || user.deletedAt) throw new UnauthorizedError('Cuenta suspendida')
 
   const [membership] = await db
     .select({ orgId: orgMembers.orgId, role: orgMembers.role, customRoleId: orgMembers.customRoleId })

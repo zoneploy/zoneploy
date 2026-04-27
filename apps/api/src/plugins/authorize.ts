@@ -20,7 +20,7 @@ const BUILT_IN_PERMISSIONS: Record<Exclude<OrgRole, 'custom'>, Permission[]> = {
     'containers:read', 'containers:write', 'containers:deploy', 'containers:terminal',
     'stacks:read', 'stacks:write', 'stacks:deploy', 'stacks:terminal',
     'servers:read', 'servers:connect', 'servers:terminal',
-    'members:read', 'members:invite', 'members:manage',
+    'members:read', 'members:manage',
     'organization:manage',
     'secrets:read', 'secrets:write',
     'audit:read',
@@ -31,7 +31,7 @@ const BUILT_IN_PERMISSIONS: Record<Exclude<OrgRole, 'custom'>, Permission[]> = {
     'containers:read', 'containers:write', 'containers:deploy', 'containers:terminal',
     'stacks:read', 'stacks:write', 'stacks:deploy', 'stacks:terminal',
     'servers:read', 'servers:connect', 'servers:terminal',
-    'members:read', 'members:invite', 'members:manage',
+    'members:read', 'members:manage',
     'organization:manage',
     'secrets:read', 'secrets:write',
     'audit:read',
@@ -56,7 +56,6 @@ const BUILT_IN_PERMISSIONS: Record<Exclude<OrgRole, 'custom'>, Permission[]> = {
   ],
 }
 
-const LEGACY_BLOCKED_PERMISSIONS = new Set<string>(['billing:read', 'billing:manage'])
 const BUILT_IN_ROLES = ['viewer', 'member', 'admin', 'owner'] as const
 
 function isBuiltInRole(role: OrgRole): role is Exclude<OrgRole, 'custom'> {
@@ -97,9 +96,7 @@ async function resolvePermissions(role: OrgRole, customRoleId: string | null): P
       .from(rolePermissions)
       .where(eq(rolePermissions.customRoleId, customRoleId))
 
-    return rows
-      .map(r => r.permission)
-      .filter(permission => !LEGACY_BLOCKED_PERMISSIONS.has(permission)) as Permission[]
+    return rows.map(r => r.permission) as Permission[]
   }
 
   return BUILT_IN_PERMISSIONS[role as Exclude<OrgRole, 'custom'>] ?? []

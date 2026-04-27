@@ -10,7 +10,7 @@ import { LoginSchema, type LoginInput } from '@zoneploy/types'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { getPostLoginPath, useLogin } from '@/hooks/useAuth'
 import { useAuthStore } from '@/stores/auth'
-import { apiClient, ApiError } from '@/lib/api-client'
+import { apiClient } from '@/lib/api-client'
 import { toSessionContext } from '@/lib/auth-session'
 import { OtpInput } from '@/components/ui/OtpInput'
 import { Button } from '@/components/ui/button'
@@ -41,7 +41,7 @@ function translateWebAuthnError(error: any, t: any): string {
 }
 
 export function LoginPage() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const login = useLogin()
@@ -51,20 +51,12 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [totpCode, setTotpCode] = useState('')
   const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; msg: string } | null>(null)
-  const [lastSubmittedEmail, setLastSubmittedEmail] = useState(searchParams.get('email') ?? '')
-  const [resendFeedback, setResendFeedback] = useState<string | null>(null)
   const prefilledEmail = searchParams.get('email') ?? ''
   const setupStatus = useQuery({
     queryKey: ['auth', 'setup-status'],
     queryFn: authApi.setupStatus,
     retry: false,
   })
-  const showVerificationPending = searchParams.get('verification') === 'pending' && !!prefilledEmail
-  const showVerified = searchParams.get('verified') === '1'
-  const blockedEmail = login.error instanceof ApiError && login.error.code === 'EMAIL_NOT_VERIFIED'
-    ? lastSubmittedEmail || prefilledEmail
-    : ''
-
   const {
     register,
     handleSubmit,
@@ -81,20 +73,8 @@ export function LoginPage() {
   }, [navigate, setupStatus.data?.requiresOwnerSetup])
 
   const onSubmit = (data: LoginInput) => {
-    setLastSubmittedEmail(data.email)
-    setResendFeedback(null)
     login.mutate(data)
   }
-
-  const resendVerification = useMutation({
-    mutationFn: (email: string) => authApi.resendVerification(email, i18n.language?.startsWith('en') ? 'en' : 'es'),
-    onSuccess: () => {
-      setResendFeedback(t('emailVerification.resentTo', { email: blockedEmail || prefilledEmail }))
-    },
-    onError: (error: unknown) => {
-      setResendFeedback(getApiError(error, t))
-    },
-  })
 
   // Verificar WebAuthn MFA
   const verifyWebAuthnMfa = useMutation({
@@ -219,63 +199,13 @@ export function LoginPage() {
         <div className="flex flex-col gap-5">
           {/* Formulario */}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-            {showVerificationPending && !blockedEmail && (
-              <div className="rounded-md border border-primary/15 bg-primary/5 px-3 py-3 text-sm">
-                <p className="font-medium text-text-primary">{t('emailVerification.pendingTitle')}</p>
-                <p className="mt-1 text-text-secondary">
-                  {t('emailVerification.pendingSubtitle', { email: prefilledEmail })}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    loading={resendVerification.isPending}
-                    onClick={() => resendVerification.mutate(prefilledEmail)}
-                  >
-                    {t('emailVerification.resend')}
-                  </Button>
-                  {resendFeedback && (
-                    <span className="text-xs text-text-secondary">{resendFeedback}</span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {showVerified && !blockedEmail && (
-              <div className="rounded-md border border-success/15 bg-success/5 px-3 py-3 text-sm">
-                <p className="font-medium text-text-primary">{t('emailVerification.success')}</p>
-                <p className="mt-1 text-text-secondary">{t('emailVerification.loginReady')}</p>
-              </div>
-            )}
-
             {/* Error global */}
             {login.error && (
-              blockedEmail ? (
-                <div className="rounded-md border border-warning/20 bg-warning/5 px-3 py-3 text-sm">
-                  <p className="font-medium text-text-primary">{t('errors.emailNotVerified')}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      loading={resendVerification.isPending}
-                      onClick={() => resendVerification.mutate(blockedEmail)}
-                    >
-                      {t('emailVerification.resend')}
-                    </Button>
-                    {resendFeedback && (
-                      <span className="text-xs text-text-secondary">{resendFeedback}</span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-md bg-error/10 border border-error/20 px-3 py-2 text-sm text-error">
-                  {login.error instanceof TypeError
-                    ? t('auth.networkError')
-                    : getApiError(login.error, t)}
-                </div>
-              )
+              <div className="rounded-md bg-error/10 border border-error/20 px-3 py-2 text-sm text-error">
+                {login.error instanceof TypeError
+                  ? t('auth.networkError')
+                  : getApiError(login.error, t)}
+              </div>
             )}
 
             {feedback && feedback.type === 'error' && (
@@ -377,7 +307,7 @@ export function LoginPage() {
         <div className="h-px bg-grey-100" />
 
         <p className="text-sm text-text-secondary">
-          {t('auth.inviteOnlyHint')}
+          {t('auth.accessManagedHint')}
         </p>
       </div>
     </AuthLayout>

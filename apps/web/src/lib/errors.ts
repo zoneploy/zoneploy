@@ -8,7 +8,6 @@ const ERROR_CODE_MAP: Record<string, string> = {
   UNAUTHORIZED: 'errors.unauthorized',
   FORBIDDEN: 'errors.forbidden',
   VALIDATION_ERROR: 'errors.validation',
-  EMAIL_NOT_VERIFIED: 'errors.emailNotVerified',
   INVALID_CREDENTIALS: 'errors.invalidCredentials',
   TOKEN_EXPIRED: 'errors.tokenExpired',
   ORG_2FA_REQUIRED: 'errors.orgTwoFactorRequired',
@@ -33,11 +32,6 @@ const ERROR_CODE_MAP: Record<string, string> = {
   FIREWALL_BACKEND_UNSUPPORTED: 'errors.firewallBackendUnsupported',
   SERVER_ALREADY_CONNECTED: 'errors.serverAlreadyConnected',
   SERVER_ALREADY_DISCONNECTING: 'errors.serverAlreadyDisconnecting',
-  OAUTH_PROVIDER_DISABLED: 'errors.oauthProviderDisabled',
-  OAUTH_EMAIL_NOT_VERIFIED: 'errors.oauthEmailNotVerified',
-  OAUTH_EMAIL_REQUIRED: 'errors.oauthEmailRequired',
-  OAUTH_EXCHANGE_FAILED: 'errors.oauthExchangeFailed',
-  OAUTH_PROFILE_FAILED: 'errors.oauthProfileFailed',
 }
 
 /**

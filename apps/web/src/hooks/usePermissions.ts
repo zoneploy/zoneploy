@@ -7,7 +7,7 @@ import type { Permission } from '@zoneploy/types'
  *
  * Usage:
  *   const { can } = usePermissions()
- *   const canInvite = can('members:invite')
+ *   const canManageMembers = can('members:manage')
  */
 export function usePermissions() {
   const session = useAuthStore(s => s.session)

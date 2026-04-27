@@ -1,5 +1,5 @@
 import {
-  Zap, Server, Rocket, Users, Mail,
+  Zap, Server, Rocket, Users,
   AlertTriangle, CheckCircle2, XCircle, Building2,
 } from 'lucide-react'
 import type { TFunction } from 'i18next'
@@ -92,13 +92,6 @@ const RENDERERS: Record<NotificationType, Renderer> = {
     icon: Users,
     iconColor: 'text-primary',
     iconBg: 'bg-primary/10',
-  }),
-  member_invited: (data, t) => ({
-    title: t('notifications.types.member_invited.title'),
-    body: t('notifications.types.member_invited.body', { org: data.orgName, invitedBy: data.invitedByName }),
-    icon: Mail,
-    iconColor: 'text-warning',
-    iconBg: 'bg-warning/10',
   }),
   addon_expiring: (data, t) => ({
     title: t('notifications.types.addon_expiring.title'),

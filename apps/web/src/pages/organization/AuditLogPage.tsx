@@ -30,8 +30,7 @@ const ACTION_STYLES: Record<string, ActionStyle> = {
   'org.updated':                  { icon: Pencil,      cls: 'bg-primary/10 text-primary border-primary/20' },
   'org.logo_updated':             { icon: RefreshCw,   cls: 'bg-primary/10 text-primary border-primary/20' },
   'org.deleted':                  { icon: Trash2,      cls: 'bg-red-500/10 text-red-400 border-red-500/20' },
-  'member.invited':               { icon: UserPlus,    cls: 'bg-primary/10 text-primary border-primary/20' },
-  'member.invite_revoked':        { icon: UserMinus,   cls: 'bg-red-500/10 text-red-400 border-red-500/20' },
+  'member.created':               { icon: UserPlus,    cls: 'bg-primary/10 text-primary border-primary/20' },
   'member.joined':                { icon: UserCheck,   cls: 'bg-success/10 text-success border-success/20' },
   'member.role_changed':          { icon: ShieldCheck, cls: 'bg-warning/10 text-warning border-warning/20' },
   'member.removed':               { icon: UserMinus,   cls: 'bg-red-500/10 text-red-400 border-red-500/20' },
@@ -105,8 +104,6 @@ const VERB_STYLES: [string, ActionStyle][] = [
   ['deleted',     { icon: Trash2,     cls: 'bg-red-500/10 text-red-400 border-red-500/20' }],
   ['toggled',     { icon: ToggleLeft, cls: 'bg-warning/10 text-warning border-warning/20' }],
   ['joined',      { icon: UserCheck,  cls: 'bg-success/10 text-success border-success/20' }],
-  ['invited',     { icon: UserPlus,   cls: 'bg-primary/10 text-primary border-primary/20' }],
-  ['revoked',     { icon: UserMinus,  cls: 'bg-red-500/10 text-red-400 border-red-500/20' }],
   ['changed',     { icon: RefreshCw,  cls: 'bg-warning/10 text-warning border-warning/20' }],
   ['removed',     { icon: Trash2,     cls: 'bg-red-500/10 text-red-400 border-red-500/20' }],
   ['deployed',    { icon: Zap,        cls: 'bg-primary/10 text-primary border-primary/20' }],
@@ -180,7 +177,7 @@ function ActorAvatar({ name }: { name: string }) {
 
 const RESOURCE_TYPES = [
   'organization', 'server', 'container', 'stack', 'project', 'environment',
-  'custom_role', 'member', 'invitation', 'secret', 'env_secret', 'domain',
+  'custom_role', 'member', 'secret', 'env_secret', 'domain',
   'addon', 'addon_binding', 'deploy_token',
 ]
 

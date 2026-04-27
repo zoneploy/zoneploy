@@ -1,14 +1,8 @@
 import { eq, and, inArray } from 'drizzle-orm'
 import { db } from '../../db/client.js'
-import { customRoles, rolePermissions, orgMembers, orgInvitations } from '../../db/schema.js'
+import { customRoles, rolePermissions, orgMembers } from '../../db/schema.js'
 import { NotFoundError, ConflictError, ForbiddenError, AppError } from '../../lib/errors.js'
 import type { Permission } from '@zoneploy/types'
-
-const LEGACY_BLOCKED_PERMISSIONS = new Set<string>(['billing:read', 'billing:manage'])
-
-function filterAssignablePermissions(permissions: Permission[]) {
-  return permissions.filter(permission => !LEGACY_BLOCKED_PERMISSIONS.has(permission))
-}
 
 function formatRole(
   r: typeof customRoles.$inferSelect,
@@ -50,7 +44,7 @@ export async function listCustomRoles(orgId: string) {
     permsByRole[row.customRoleId]!.push(row.permission as Permission)
   }
 
-  return roles.map(r => formatRole(r, filterAssignablePermissions(permsByRole[r.id] ?? [])))
+  return roles.map(r => formatRole(r, permsByRole[r.id] ?? []))
 }
 
 export async function getCustomRole(orgId: string, roleId: string) {
@@ -67,7 +61,7 @@ export async function getCustomRole(orgId: string, roleId: string) {
     .from(rolePermissions)
     .where(eq(rolePermissions.customRoleId, roleId))
 
-  return formatRole(role, filterAssignablePermissions(perms.map(p => p.permission as Permission)))
+  return formatRole(role, perms.map(p => p.permission as Permission))
 }
 
 export async function createCustomRole(
@@ -91,7 +85,7 @@ export async function createCustomRole(
   if (!role) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear el rol')
 
   // Insert deduplicated permissions.
-  const uniquePerms = filterAssignablePermissions([...new Set(data.permissions)])
+  const uniquePerms = [...new Set(data.permissions)]
   if (uniquePerms.length > 0) {
     await db.insert(rolePermissions).values(
       uniquePerms.map(p => ({ customRoleId: role.id, permission: p })),
@@ -141,7 +135,7 @@ export async function updateCustomRole(
   // Replace permissions if provided.
   let finalPerms: Permission[]
   if (data.permissions) {
-    const uniquePerms = filterAssignablePermissions([...new Set(data.permissions)])
+    const uniquePerms = [...new Set(data.permissions)]
     await db.delete(rolePermissions).where(eq(rolePermissions.customRoleId, roleId))
     if (uniquePerms.length > 0) {
       await db.insert(rolePermissions).values(
@@ -154,7 +148,7 @@ export async function updateCustomRole(
       .select({ permission: rolePermissions.permission })
       .from(rolePermissions)
       .where(eq(rolePermissions.customRoleId, roleId))
-    finalPerms = filterAssignablePermissions(perms.map(p => p.permission as Permission))
+    finalPerms = perms.map(p => p.permission as Permission)
   }
 
   return formatRole(updated, finalPerms)
@@ -170,20 +164,6 @@ export async function deleteCustomRole(orgId: string, roleId: string) {
 
   if (memberWithRole) {
     throw new ForbiddenError('No podés eliminar un rol que está asignado a miembros activos')
-  }
-
-  const [pendingInvitationWithRole] = await db
-    .select({ id: orgInvitations.id })
-    .from(orgInvitations)
-    .where(and(
-      eq(orgInvitations.orgId, orgId),
-      eq(orgInvitations.customRoleId, roleId),
-      eq(orgInvitations.status, 'pending'),
-    ))
-    .limit(1)
-
-  if (pendingInvitationWithRole) {
-    throw new ForbiddenError('Cannot delete a role assigned to pending invitations')
   }
 
   const result = await db

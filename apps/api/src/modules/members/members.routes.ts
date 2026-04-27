@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { CreateMemberSchema } from '@zoneploy/types'
 import { authenticate } from '../../plugins/authenticate.js'
 import { authorize } from '../../plugins/authorize.js'
 import { AppError } from '../../lib/errors.js'
-import { listMembers, changeMemberRole, removeMember, transferOwnership, getMemberAuditProfile } from './members.service.js'
+import { listMembers, createMember, changeMemberRole, removeMember, transferOwnership, getMemberAuditProfile } from './members.service.js'
 import { audit } from '../../lib/audit.js'
 
 const ChangeRoleSchema = z.object({
@@ -21,6 +22,42 @@ export async function memberRoutes(app: FastifyInstance) {
   app.get('/', { preHandler: [authenticate, authorize.permission('members:read')] }, async (request, reply) => {
     const { orgId } = request.params as { orgId: string }
     return reply.send(await listMembers(orgId))
+  })
+
+  // POST /organizations/:orgId/members
+  app.post('/', { preHandler: [authenticate, authorize.permission('members:manage')] }, async (request, reply) => {
+    const { orgId } = request.params as { orgId: string }
+
+    const input = CreateMemberSchema.safeParse(request.body)
+    if (!input.success) {
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos invalidos' } })
+    }
+
+    try {
+      const member = await createMember(orgId, request.userId, input.data)
+
+      await audit({
+        orgId,
+        actor: { id: request.userId, email: request.userEmail, name: request.userName },
+        action: 'member.created',
+        resourceType: 'member',
+        resourceId: member.userId,
+        resourceName: member.userFullName || member.userEmail,
+        metadata: {
+          role: member.role,
+          customRoleId: member.customRoleId,
+          email: member.userEmail,
+        },
+        ipAddress: request.ip,
+      })
+
+      return reply.status(201).send(member)
+    } catch (err) {
+      if (err instanceof AppError) {
+        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
+      }
+      throw err
+    }
   })
 
   // PATCH /organizations/:orgId/members/:userId
@@ -66,7 +103,7 @@ export async function memberRoutes(app: FastifyInstance) {
 
     try {
       const targetMember = await getMemberAuditProfile(orgId, targetUserId)
-      await removeMember(orgId, request.userId, targetUserId)
+      const result = await removeMember(orgId, request.userId, targetUserId)
 
       await audit({
         orgId,
@@ -75,7 +112,7 @@ export async function memberRoutes(app: FastifyInstance) {
         resourceType: 'member',
         resourceId: targetUserId,
         resourceName: targetMember.displayName,
-        metadata: { previousRole: targetMember.role, email: targetMember.userEmail },
+        metadata: { previousRole: targetMember.role, email: targetMember.userEmail, softDeletedUser: result.softDeleted },
         ipAddress: request.ip,
       })
 

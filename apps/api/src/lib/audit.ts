@@ -5,8 +5,7 @@ import { auditLogs } from '../db/schema.js'
 
 export type AuditAction =
   | 'org.created' | 'org.updated' | 'org.deleted' | 'org.logo_updated' | 'org.2fa_toggled' | 'org.2fa_enabled' | 'org.2fa_disabled'
-  | 'member.invited' | 'member.joined' | 'member.role_changed' | 'member.removed'
-  | 'member.invite_revoked'
+  | 'member.created' | 'member.joined' | 'member.role_changed' | 'member.removed'
   | 'project.created' | 'project.updated' | 'project.deleted'
   | 'environment.created' | 'environment.updated' | 'environment.deleted' | 'environment.protected_toggled'
   | 'container.created' | 'container.updated' | 'container.deleted'
@@ -25,7 +24,6 @@ export type AuditAction =
   | 'addon.installed' | 'addon.configured' | 'addon.backend_action' | 'addon.uninstalled'
   | 'addon.bound' | 'addon.binding_configured' | 'addon.unbound'
   | 'deploy_token.created' | 'deploy_token.deleted'
-  | 'plan.changed'
 
 export interface AuditOptions {
   orgId: string

@@ -56,12 +56,6 @@ const ConfigSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('Zoneploy <no-reply@zoneploy.com>'),
 
-  // OAuth social login
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GITHUB_CLIENT_ID: z.string().optional(),
-  GITHUB_CLIENT_SECRET: z.string().optional(),
-
   // Wildcard cert for HTTPS (*.ROUTING_DOMAIN).
   // Directory containing cert.pem and key.pem from setup-wildcard-cert.sh.
   // When configured and present, servers are provisioned in HTTPS mode.

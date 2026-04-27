@@ -17,7 +17,6 @@ import { WorkerClientError } from './lib/worker-client.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
 import { organizationRoutes } from './modules/organizations/organizations.routes.js'
 import { memberRoutes } from './modules/members/members.routes.js'
-import { invitationRoutes, publicInvitationRoutes } from './modules/invitations/invitations.routes.js'
 import { projectRoutes } from './modules/projects/projects.routes.js'
 import { environmentRoutes } from './modules/environments/environments.routes.js'
 import { customRoleRoutes } from './modules/custom-roles/custom-roles.routes.js'
@@ -136,14 +135,6 @@ server.get('/health', async () => ({
   timestamp: new Date().toISOString(),
 }))
 
-// Redirect email verification links to the frontend
-
-server.get('/verify-email', async (request, reply) => {
-  const { token } = request.query as { token?: string }
-  const dest = `${config.APP_URL}/verify-email${token ? `?token=${encodeURIComponent(token)}` : ''}`
-  return reply.redirect(dest, 302)
-})
-
 // Static logos
 // Serves: GET /uploads/org-logos/:filename
 
@@ -173,8 +164,6 @@ await server.register(authRoutes, { prefix: '/api/v1/auth' })
 // Organizations
 await server.register(organizationRoutes, { prefix: '/api/v1/organizations' })
 await server.register(memberRoutes, { prefix: '/api/v1/organizations/:orgId/members' })
-await server.register(invitationRoutes, { prefix: '/api/v1/organizations/:orgId/invitations' })
-await server.register(publicInvitationRoutes, { prefix: '/api/v1/invitations' })
 await server.register(customRoleRoutes, { prefix: '/api/v1/organizations/:orgId/roles' })
 await server.register(auditRoutes, { prefix: '/api/v1/organizations/:orgId/audit' })
 

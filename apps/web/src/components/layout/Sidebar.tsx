@@ -5,14 +5,12 @@ import {
   LayoutDashboard, Server, Box, Users, Settings,
   ChevronRight, ChevronsUpDown, Building2, Bell,
   LogOut, User, Shield, Check, Sun, Moon, MessageSquare, BookOpen,
-  Rocket, X, FolderOpen, ClipboardList, Mail, UserPlus, BellOff, Package,
+  Rocket, X, FolderOpen, ClipboardList, BellOff, Package,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
-import { authApi } from '@/api/auth'
-import { invitationsApi } from '@/api/members'
 import { notificationsApi } from '@/api/notifications'
 import { serversApi } from '@/api/servers'
 import { containersApi } from '@/api/containers'
@@ -20,7 +18,7 @@ import { projectsApi } from '@/api/projects'
 import { useLogout } from '@/hooks/useAuth'
 import { useTheme } from '@/contexts/ThemeContext'
 import { renderNotification, formatRelativeTime } from '@/lib/notificationRenderers'
-import type { OrgRole, Permission } from '@zoneploy/types'
+import type { Permission } from '@zoneploy/types'
 import { usePermissions } from '@/hooks/usePermissions'
 import { OrgLogo } from '@/components/organization/OrgLogo'
 import { DOCS_URL } from '@/lib/external-links'
@@ -61,54 +59,6 @@ const NAV_ITEMS: NavItemDef[] = [
   },
 ]
 
-
-// Pending invitations shown only when no org is selected
-
-function PendingInvitationsNavItem({ collapsed, onClose }: { collapsed: boolean; onClose?: () => void }) {
-  const { t } = useTranslation()
-  const { data: invitations = [] } = useQuery({
-    queryKey: ['pending-invitations'],
-    queryFn: authApi.pendingInvitations,
-    staleTime: 0,
-  })
-  const count = invitations.length
-
-  return (
-    <NavLink
-      to="/invitations"
-      onClick={onClose}
-      title={collapsed ? t('nav.invitations') : undefined}
-      className={({ isActive }) => cn(
-        'group flex w-full items-center gap-2.5 rounded-sm py-1 text-sm font-medium transition-colors',
-        collapsed ? 'justify-center px-1' : 'px-2',
-        isActive
-          ? 'bg-grey-50 text-primary'
-          : 'text-text-secondary hover:bg-grey-50 hover:text-text-primary',
-      )}
-    >
-      {({ isActive }) => (
-        <>
-          <span className={cn(
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded-sm transition-colors',
-            isActive ? 'bg-primary/10 text-primary' : 'text-text-secondary group-hover:text-text-primary',
-          )}>
-            <Mail size={17} strokeWidth={1.6} />
-          </span>
-          {!collapsed && (
-            <>
-              <span className="flex-1">{t('nav.invitations')}</span>
-              {count > 0 && (
-                <span className="h-5 min-w-[20px] px-1 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">
-                  {count}
-                </span>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </NavLink>
-  )
-}
 
 // Nav icon
 
@@ -273,9 +223,6 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const accessToken = useAuthStore(s => s.accessToken)
-  const session = useAuthStore(s => s.session)
-  const setSession = useAuthStore(s => s.setSession)
 
   const { data: notifData, isLoading: notifLoading } = useQuery({
     queryKey: ['notifications'],
@@ -284,21 +231,8 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
     refetchInterval: 60_000,
   })
 
-  const { data: pendingInvitations = [] } = useQuery({
-    queryKey: ['pending-invitations'],
-    queryFn: authApi.pendingInvitations,
-    refetchInterval: 30_000,
-    staleTime: 0,
-  })
-
   const notifications = notifData?.items ?? []
   const unreadCount = notifData?.unread ?? 0
-  const inviteCount = pendingInvitations.length
-
-  // Open invitations when pending; otherwise open notifications.
-  const [tab, setTab] = useState<'notifications' | 'invitations'>(
-    () => pendingInvitations.length > 0 ? 'invitations' : 'notifications'
-  )
 
   const markRead = useMutation({
     mutationFn: (id: string) => notificationsApi.markRead(id),
@@ -310,34 +244,6 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   })
 
-  const accept = useMutation({
-    mutationFn: (token: string) => invitationsApi.accept(token),
-    onSuccess: (result) => {
-      const updated = {
-        ...session!,
-        org: {
-          id: result.orgId,
-          name: result.orgName,
-          slug: result.orgSlug,
-          logoUrl: null as string | null,
-          require2fa: result.orgRequire2fa ?? false,
-          role: result.role as OrgRole,
-          customRoleId: result.customRoleId,
-          permissions: result.permissions,
-        },
-      }
-      setSession(accessToken!, updated)
-      queryClient.clear()
-      onClose()
-      navigate('/projects', { replace: true })
-    },
-  })
-
-  const decline = useMutation({
-    mutationFn: (token: string) => invitationsApi.decline(token),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pending-invitations'] }),
-  })
-
   const handleNotifClick = (id: string, link: string | null | undefined, isUnread: boolean) => {
     if (isUnread) markRead.mutate(id)
     if (link) { navigate(link); onClose() }
@@ -347,165 +253,70 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
     <>
       <div className="fixed inset-0 md:hidden" style={{ zIndex: 9998 }} onClick={onClose} />
       <div data-sidebar-panel="notifications" className="fixed top-14 left-2 right-2 md:left-[330px] md:right-auto md:w-80 bg-background-paper rounded-xl shadow-darker-md border border-grey-100 overflow-hidden" style={{ zIndex: 9999 }}>
-      {/* Tabs */}
-      <div className="flex border-b border-grey-100">
-        <button
-          onClick={() => setTab('notifications')}
-          className={cn(
-            'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors',
-            tab === 'notifications'
-              ? 'text-text-primary border-b-2 border-primary -mb-px'
-              : 'text-text-secondary hover:text-text-primary',
-          )}
-        >
-          {t('sidebar.notifications')}
+        <div className="flex items-center justify-between border-b border-grey-100 px-4 py-2.5">
+          <p className="text-xs font-semibold text-text-primary">{t('sidebar.notifications')}</p>
           {unreadCount > 0 && (
-            <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setTab('invitations')}
-          className={cn(
-            'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors',
-            tab === 'invitations'
-              ? 'text-text-primary border-b-2 border-primary -mb-px'
-              : 'text-text-secondary hover:text-text-primary',
-          )}
-        >
-          {t('sidebar.invitations')}
-          {inviteCount > 0 && (
-            <span className="h-4 min-w-[16px] px-1 rounded-full bg-error text-white text-[9px] font-bold flex items-center justify-center">
-              {inviteCount}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Tab: Notificaciones */}
-      {tab === 'notifications' && (
-        <>
-          {unreadCount > 0 && (
-            <div className="flex justify-end px-4 py-1.5 border-b border-grey-100/60">
-              <button
-                onClick={() => markAllRead.mutate()}
-                disabled={markAllRead.isPending}
-                className="text-[11px] text-primary hover:underline font-medium disabled:opacity-50"
-              >
-                {t('sidebar.markAllRead')}
-              </button>
-            </div>
-          )}
-          <div className="max-h-[360px] overflow-y-auto divide-y divide-grey-100/50">
-            {notifLoading ? (
-              <div className="py-8 text-center text-xs text-text-disabled">{t('common.loading')}</div>
-            ) : notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-                <BellOff size={28} className="text-text-disabled mb-2" strokeWidth={1.2} />
-                <p className="text-sm text-text-secondary">{t('sidebar.noNotifications')}</p>
-              </div>
-            ) : (
-              notifications.map(notif => {
-                const isUnread = !notif.readAt
-                const display = renderNotification(notif.type as any, notif.data, notif.link, t)
-                const Icon = display.icon
-                return (
-                  <div
-                    key={notif.id}
-                    onClick={() => handleNotifClick(notif.id, notif.link, isUnread)}
-                    className={cn(
-                      'flex items-start gap-3 px-4 py-3 transition-colors',
-                      notif.link ? 'cursor-pointer hover:bg-grey-50' : 'cursor-default',
-                      isUnread && 'bg-primary/[0.03]',
-                    )}
-                  >
-                    <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5', display.iconBg)}>
-                      <Icon size={16} className={display.iconColor} strokeWidth={1.6} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-text-primary leading-snug">{display.title}</p>
-                        {isUnread && <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />}
-                      </div>
-                      <p className="text-xs text-text-secondary mt-0.5 leading-relaxed line-clamp-2">{display.body}</p>
-                      <p className="text-[10px] text-text-disabled mt-1">{formatRelativeTime(notif.createdAt, t)}</p>
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
-          <div className="px-4 py-2 border-t border-grey-100">
             <button
-              onClick={() => { navigate('/notifications'); onClose() }}
-              className="w-full text-xs text-center text-text-secondary hover:text-primary transition-colors py-0.5 font-medium"
+              onClick={() => markAllRead.mutate()}
+              disabled={markAllRead.isPending}
+              className="text-[11px] text-primary hover:underline font-medium disabled:opacity-50"
             >
-              {t('sidebar.viewAll')}
+              {t('sidebar.markAllRead')}
             </button>
-          </div>
-        </>
-      )}
-
-      {/* Invitations tab. */}
-      {tab === 'invitations' && (
-        <>
-        <div className="max-h-[400px] overflow-y-auto">
-          {pendingInvitations.length === 0 ? (
+          )}
+        </div>
+        <div className="max-h-[360px] overflow-y-auto divide-y divide-grey-100/50">
+          {notifLoading ? (
+            <div className="py-8 text-center text-xs text-text-disabled">{t('common.loading')}</div>
+          ) : notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-              <Mail size={28} className="text-text-disabled mb-2" strokeWidth={1.2} />
-              <p className="text-sm text-text-secondary">{t('sidebar.noInvitations')}</p>
+              <BellOff size={28} className="text-text-disabled mb-2" strokeWidth={1.2} />
+              <p className="text-sm text-text-secondary">{t('sidebar.noNotifications')}</p>
             </div>
           ) : (
-            pendingInvitations.map(inv => (
-              <div key={inv.id} className="flex items-start gap-3 px-4 py-3.5 border-b border-grey-100/60 last:border-0">
-                <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                  <UserPlus size={15} className="text-primary" strokeWidth={1.6} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-text-primary leading-snug truncate">{inv.orgName}</p>
-                  <p className="text-xs text-text-secondary mt-0.5">
-                    {t('dashboard.invitedBy', { name: inv.invitedByName })}
-                    {' · '}
-                    <span>{inv.role === 'custom' ? inv.customRoleName || t('members.roles.custom') : t(`members.roles.${inv.role}`, { defaultValue: inv.role })}</span>
-                  </p>
-                  <div className="flex items-center gap-2 mt-2.5">
-                    <button
-                      onClick={() => accept.mutate(inv.token)}
-                      disabled={accept.isPending || decline.isPending}
-                      className="flex-1 rounded-lg bg-primary text-white text-xs font-semibold py-1.5 hover:bg-primary/90 transition-colors disabled:opacity-50"
-                    >
-                      {t('invitation.accept')}
-                    </button>
-                    <button
-                      onClick={() => decline.mutate(inv.token)}
-                      disabled={accept.isPending || decline.isPending}
-                      className="flex-1 rounded-lg border border-grey-200 text-text-secondary text-xs font-semibold py-1.5 hover:bg-grey-50 transition-colors disabled:opacity-50"
-                    >
-                      {t('invitation.decline')}
-                    </button>
+            notifications.map(notif => {
+              const isUnread = !notif.readAt
+              const display = renderNotification(notif.type as any, notif.data, notif.link, t)
+              const Icon = display.icon
+              return (
+                <div
+                  key={notif.id}
+                  onClick={() => handleNotifClick(notif.id, notif.link, isUnread)}
+                  className={cn(
+                    'flex items-start gap-3 px-4 py-3 transition-colors',
+                    notif.link ? 'cursor-pointer hover:bg-grey-50' : 'cursor-default',
+                    isUnread && 'bg-primary/[0.03]',
+                  )}
+                >
+                  <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5', display.iconBg)}>
+                    <Icon size={16} className={display.iconColor} strokeWidth={1.6} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-text-primary leading-snug">{display.title}</p>
+                      {isUnread && <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />}
+                    </div>
+                    <p className="text-xs text-text-secondary mt-0.5 leading-relaxed line-clamp-2">{display.body}</p>
+                    <p className="text-[10px] text-text-disabled mt-1">{formatRelativeTime(notif.createdAt, t)}</p>
                   </div>
                 </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
         <div className="px-4 py-2 border-t border-grey-100">
           <button
-            onClick={() => { navigate('/invitations'); onClose() }}
+            onClick={() => { navigate('/notifications'); onClose() }}
             className="w-full text-xs text-center text-text-secondary hover:text-primary transition-colors py-0.5 font-medium"
           >
-            {t('sidebar.viewAllInvitations')}
+            {t('sidebar.viewAll')}
           </button>
         </div>
-        </>
-      )}
-    </div>
+      </div>
     </>,
     document.body,
   )
 }
-
 // User menu
 
 function UserMenu({ onClose }: { onClose: () => void }) {
@@ -704,7 +515,7 @@ function GettingStartedWidget({ collapsed }: { collapsed: boolean }) {
       id: 'create-org',
       label: t('gettingStarted.step0'),
       done: false,
-      to: '/invitations',
+      to: '/dashboard',
     },
   ]
 
@@ -805,20 +616,14 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) 
     ? session.user.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : '?'
 
-  // Bell total badge: pending invitations plus unread notifications.
-  const { data: pendingInvitations = [] } = useQuery({
-    queryKey: ['pending-invitations'],
-    queryFn: authApi.pendingInvitations,
-    refetchInterval: 30_000,
-    staleTime: 0,
-  })
+  // Bell total badge: unread notifications.
   const { data: notifData } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => notificationsApi.list({ limit: 1 }),
     refetchInterval: 60_000,
     staleTime: 0,
   })
-  const bellBadgeCount = pendingInvitations.length + (notifData?.unread ?? 0)
+  const bellBadgeCount = notifData?.unread ?? 0
 
   // Close all panels when clicking outside the sidebar and portals.
   useEffect(() => {
@@ -923,7 +728,6 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) 
                 collapsed={collapsed}
                 onClose={onMobileClose}
               />
-              <PendingInvitationsNavItem collapsed={collapsed} onClose={onMobileClose} />
             </>
           )}
 

@@ -212,7 +212,7 @@ function StepPassword({ email, code, onDone }: { email: string; code: string; on
               type={show ? 'text' : 'password'}
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder={t('invitation.passwordPlaceholder')}
+              placeholder={t('members.userPasswordPlaceholder')}
               className="pr-10"
             />
             <button

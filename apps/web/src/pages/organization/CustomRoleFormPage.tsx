@@ -23,7 +23,7 @@ const PERMISSION_GROUPS: Record<string, Permission[]> = {
   containers: ['containers:read', 'containers:write', 'containers:deploy', 'containers:terminal'],
   stacks: ['stacks:read', 'stacks:write', 'stacks:deploy', 'stacks:terminal'],
   servers: ['servers:read', 'servers:connect', 'servers:terminal'],
-  members: ['members:read', 'members:invite', 'members:manage'],
+  members: ['members:read', 'members:manage'],
   organization: ['organization:manage'],
   secrets: ['secrets:read', 'secrets:write'],
   audit: ['audit:read'],

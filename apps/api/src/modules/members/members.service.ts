@@ -1,9 +1,11 @@
-import { eq, and, ne } from 'drizzle-orm'
+import bcrypt from 'bcryptjs'
+import { eq, and, ne, isNull } from 'drizzle-orm'
 import { db } from '../../db/client.js'
-import { orgMembers, users, organizations, customRoles } from '../../db/schema.js'
-import { NotFoundError, ForbiddenError, ValidationError } from '../../lib/errors.js'
-import type { OrgRole } from '@zoneploy/types'
+import { orgMembers, users, organizations, customRoles, refreshTokens, passkeys } from '../../db/schema.js'
+import { NotFoundError, ForbiddenError, ValidationError, ConflictError, AppError } from '../../lib/errors.js'
+import type { CreateMemberInput, OrgRole } from '@zoneploy/types'
 import { resolvePermissions } from '../../plugins/authorize.js'
+import { createNotification } from '../notifications/notifications.service.js'
 
 // Services
 
@@ -24,20 +26,125 @@ export async function listMembers(orgId: string) {
     .from(orgMembers)
     .innerJoin(users, eq(orgMembers.userId, users.id))
     .leftJoin(customRoles, eq(orgMembers.customRoleId, customRoles.id))
-    .where(eq(orgMembers.orgId, orgId))
+    .where(and(eq(orgMembers.orgId, orgId), isNull(users.deletedAt)))
     .orderBy(orgMembers.joinedAt)
 
-  return rows.map(r => ({
-    id: r.id,
-    role: r.role,
-    customRoleId: r.customRoleId,
-    customRoleName: r.customRoleName,
-    joinedAt: r.joinedAt.toISOString(),
-    userId: r.userId,
-    userEmail: r.userEmail,
-    userFullName: r.userFullName,
-    userAvatarUrl: r.userAvatarUrl,
-    twoFactorEnabled: r.userTotpEnabled,
+  return rows.map(formatMemberRow)
+}
+
+export async function createMember(
+  orgId: string,
+  requesterId: string,
+  data: CreateMemberInput,
+) {
+  if (data.role === 'custom' && !data.customRoleId) {
+    throw new ValidationError('customRoleId es requerido cuando el rol es custom')
+  }
+
+  const requester = await getMember(orgId, requesterId)
+  if (!requester) throw new ForbiddenError('No sos miembro de esta organizacion')
+  await assertCanManageMembers(requester)
+
+  const customRole = data.role === 'custom'
+    ? await getAssignableCustomRole(orgId, data.customRoleId!)
+    : null
+
+  const email = data.email.trim().toLowerCase()
+  const passwordHash = await bcrypt.hash(data.password, 12)
+
+  const user = await db.transaction(async tx => {
+    const [existing] = await tx
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+
+    let userRecord: typeof users.$inferSelect
+
+    if (existing && !existing.deletedAt) {
+      if (existing.status !== 'active') {
+        throw new ConflictError('El usuario existe pero no esta disponible')
+      }
+
+      const [existingMember] = await tx
+        .select({ id: orgMembers.id })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, existing.id)))
+        .limit(1)
+
+      if (existingMember) throw new ConflictError('El usuario ya es miembro de esta organizacion')
+    }
+
+    if (existing?.deletedAt) {
+      await tx.delete(refreshTokens).where(eq(refreshTokens.userId, existing.id))
+      await tx.delete(passkeys).where(eq(passkeys.userId, existing.id))
+
+      const [reactivated] = await tx
+        .update(users)
+        .set({
+          email,
+          passwordHash,
+          fullName: data.fullName.trim(),
+          avatarUrl: null,
+          status: 'active',
+          emailVerified: true,
+          totpSecret: null,
+          totpEnabled: false,
+          deletedAt: null,
+          deletedByUserId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, existing.id))
+        .returning()
+
+      if (!reactivated) throw new AppError(500, 'INTERNAL_ERROR', 'Error al reactivar usuario')
+      userRecord = reactivated
+    } else if (existing) {
+      userRecord = existing
+    } else {
+      const [created] = await tx
+        .insert(users)
+        .values({
+          email,
+          passwordHash,
+          fullName: data.fullName.trim(),
+          emailVerified: true,
+        })
+        .returning()
+
+      if (!created) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear usuario')
+      userRecord = created
+    }
+
+    await tx.insert(orgMembers).values({
+      orgId,
+      userId: userRecord.id,
+      role: data.role,
+      customRoleId: data.role === 'custom' ? data.customRoleId! : null,
+    })
+
+    return userRecord
+  })
+
+  createNotification({
+    userId: user.id,
+    orgId,
+    type: 'welcome',
+    data: { name: user.fullName },
+    link: '/notifications',
+  }).catch(err => console.error('Error creando notificacion de bienvenida:', err))
+
+  return getMemberAuditProfile(orgId, user.id).then(member => ({
+    id: member.memberId,
+    role: member.role,
+    customRoleId: member.customRoleId,
+    customRoleName: customRole?.name ?? member.customRoleName ?? null,
+    joinedAt: member.joinedAt.toISOString(),
+    userId: member.userId,
+    userEmail: member.userEmail,
+    userFullName: member.userFullName,
+    userAvatarUrl: member.userAvatarUrl,
+    twoFactorEnabled: member.userTotpEnabled,
   }))
 }
 
@@ -46,13 +153,19 @@ export async function getMemberAuditProfile(orgId: string, userId: string) {
     .select({
       role: orgMembers.role,
       customRoleId: orgMembers.customRoleId,
+      customRoleName: customRoles.name,
+      memberId: orgMembers.id,
+      joinedAt: orgMembers.joinedAt,
       userId: users.id,
       userEmail: users.email,
       userFullName: users.fullName,
+      userAvatarUrl: users.avatarUrl,
+      userTotpEnabled: users.totpEnabled,
     })
     .from(orgMembers)
     .innerJoin(users, eq(orgMembers.userId, users.id))
-    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, userId)))
+    .leftJoin(customRoles, eq(orgMembers.customRoleId, customRoles.id))
+    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, userId), isNull(users.deletedAt)))
     .limit(1)
 
   if (!member) throw new NotFoundError('Miembro no encontrado')
@@ -109,6 +222,10 @@ export async function changeMemberRole(
 }
 
 export async function removeMember(orgId: string, requesterId: string, targetUserId: string) {
+  if (requesterId === targetUserId) {
+    throw new ForbiddenError('No podes eliminar tu propia cuenta')
+  }
+
   const [requester, target] = await Promise.all([
     getMember(orgId, requesterId),
     getMember(orgId, targetUserId),
@@ -127,9 +244,36 @@ export async function removeMember(orgId: string, requesterId: string, targetUse
     throw new ForbiddenError('Un Admin no puede remover a otro Admin')
   }
 
-  await db.delete(orgMembers).where(
-    and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)),
-  )
+  let softDeleted = false
+
+  await db.transaction(async tx => {
+    await tx.delete(orgMembers).where(
+      and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)),
+    )
+
+    const [remainingMembership] = await tx
+      .select({ id: orgMembers.id })
+      .from(orgMembers)
+      .where(eq(orgMembers.userId, targetUserId))
+      .limit(1)
+
+    if (!remainingMembership) {
+      await tx
+        .update(users)
+        .set({
+          status: 'suspended',
+          deletedAt: new Date(),
+          deletedByUserId: requesterId,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, targetUserId))
+
+      await tx.delete(refreshTokens).where(eq(refreshTokens.userId, targetUserId))
+      softDeleted = true
+    }
+  })
+
+  return { softDeleted }
 }
 
 export async function transferOwnership(orgId: string, currentOwnerId: string, newOwnerId: string) {
@@ -181,7 +325,8 @@ async function getMember(orgId: string, userId: string) {
   const [member] = await db
     .select({ role: orgMembers.role, customRoleId: orgMembers.customRoleId })
     .from(orgMembers)
-    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, userId)))
+    .innerJoin(users, eq(orgMembers.userId, users.id))
+    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, userId), isNull(users.deletedAt)))
     .limit(1)
 
   return member ?? null
@@ -203,4 +348,30 @@ async function getAssignableCustomRole(orgId: string, customRoleId: string) {
 
   if (!role) throw new NotFoundError('Rol personalizado no encontrado')
   return role
+}
+
+function formatMemberRow(r: {
+  id: string
+  role: string
+  customRoleId: string | null
+  customRoleName: string | null
+  joinedAt: Date
+  userId: string
+  userEmail: string
+  userFullName: string
+  userAvatarUrl: string | null
+  userTotpEnabled: boolean
+}) {
+  return {
+    id: r.id,
+    role: r.role,
+    customRoleId: r.customRoleId,
+    customRoleName: r.customRoleName,
+    joinedAt: r.joinedAt.toISOString(),
+    userId: r.userId,
+    userEmail: r.userEmail,
+    userFullName: r.userFullName,
+    userAvatarUrl: r.userAvatarUrl,
+    twoFactorEnabled: r.userTotpEnabled,
+  }
 }

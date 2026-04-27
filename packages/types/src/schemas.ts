@@ -74,8 +74,10 @@ export const UpdateCustomRoleSchema = z.object({
 
 const OrgRoleSchema = z.enum(['admin', 'member', 'viewer', 'custom'])
 
-export const InviteMemberSchema = z.object({
+export const CreateMemberSchema = z.object({
+  fullName: z.string().min(2, 'Minimo 2 caracteres').max(100),
   email: z.string().email(),
+  password: z.string().min(8, 'Minimo 8 caracteres').max(100),
   role: OrgRoleSchema,
   customRoleId: z.string().uuid().optional(),
 }).refine(
@@ -175,7 +177,7 @@ export type CreateEnvironmentInput = z.infer<typeof CreateEnvironmentSchema>
 export type UpdateEnvironmentInput = z.infer<typeof UpdateEnvironmentSchema>
 export type CreateCustomRoleInput = z.infer<typeof CreateCustomRoleSchema>
 export type UpdateCustomRoleInput = z.infer<typeof UpdateCustomRoleSchema>
-export type InviteMemberInput = z.infer<typeof InviteMemberSchema>
+export type CreateMemberInput = z.infer<typeof CreateMemberSchema>
 export type UpdateMemberRoleInput = z.infer<typeof UpdateMemberRoleSchema>
 export type CreateContainerInput = z.infer<typeof CreateContainerSchema>
 export type UpdateContainerInput = z.infer<typeof UpdateContainerSchema>
