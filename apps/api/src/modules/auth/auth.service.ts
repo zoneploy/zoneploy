@@ -132,7 +132,6 @@ async function createUserAccount(input: RegisterInput) {
       email: input.email,
       passwordHash,
       fullName: input.fullName,
-      emailVerified: true,
     })
     .returning()
 
@@ -241,7 +240,6 @@ export async function login(input: LoginInput, ctx?: SessionContext) {
       email: user.email,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,
-      emailVerified: user.emailVerified,
       totpEnabled: user.totpEnabled,
     },
     org: org
@@ -273,7 +271,6 @@ export async function refresh(token: string) {
       status: users.status,
       deletedAt: users.deletedAt,
       avatarUrl: users.avatarUrl,
-      emailVerified: users.emailVerified,
       totpEnabled: users.totpEnabled,
     })
     .from(users)
@@ -323,7 +320,6 @@ export async function refresh(token: string) {
       email: user.email,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,
-      emailVerified: user.emailVerified,
       totpEnabled: user.totpEnabled,
     },
     org: org
@@ -349,7 +345,7 @@ export async function logout(token: string) {
 // Used by WebAuthn to generate tokens after passkey authentication.
 export async function loginByUserId(userId: string, ctx?: SessionContext) {
   const [user] = await db
-    .select({ id: users.id, email: users.email, status: users.status, deletedAt: users.deletedAt, fullName: users.fullName, avatarUrl: users.avatarUrl, emailVerified: users.emailVerified, totpEnabled: users.totpEnabled })
+    .select({ id: users.id, email: users.email, status: users.status, deletedAt: users.deletedAt, fullName: users.fullName, avatarUrl: users.avatarUrl, totpEnabled: users.totpEnabled })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
@@ -381,7 +377,6 @@ export async function loginByUserId(userId: string, ctx?: SessionContext) {
       email: user.email,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,
-      emailVerified: user.emailVerified,
       totpEnabled: user.totpEnabled,
     },
     org: org
@@ -456,7 +451,7 @@ export async function completeMfaTotp(userId: string, code: string, ctx?: Sessio
 // Helper: generates final tokens after MFA verification.
 async function issueFinalTokens(userId: string, ctx?: SessionContext) {
   const [user] = await db
-    .select({ id: users.id, email: users.email, status: users.status, deletedAt: users.deletedAt, fullName: users.fullName, avatarUrl: users.avatarUrl, emailVerified: users.emailVerified, totpEnabled: users.totpEnabled })
+    .select({ id: users.id, email: users.email, status: users.status, deletedAt: users.deletedAt, fullName: users.fullName, avatarUrl: users.avatarUrl, totpEnabled: users.totpEnabled })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
@@ -488,7 +483,6 @@ async function issueFinalTokens(userId: string, ctx?: SessionContext) {
       email: user.email,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,
-      emailVerified: user.emailVerified,
       totpEnabled: user.totpEnabled,
     },
     org: org
@@ -505,7 +499,6 @@ export async function getMe(userId: string) {
       fullName: users.fullName,
       avatarUrl: users.avatarUrl,
       status: users.status,
-      emailVerified: users.emailVerified,
       isPlatformAdmin: users.isPlatformAdmin,
       createdAt: users.createdAt,
     })

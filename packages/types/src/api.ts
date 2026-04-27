@@ -27,7 +27,6 @@ export interface AuthSessionResponse {
     email: string
     fullName: string
     avatarUrl: string | null
-    emailVerified: boolean
     totpEnabled: boolean
   }
   org: {
@@ -74,7 +73,6 @@ export interface SessionContext {
     fullName: string
     avatarUrl: string | null
     isPlatformAdmin: boolean
-    emailVerified: boolean
     totpEnabled: boolean
   }
   org: {

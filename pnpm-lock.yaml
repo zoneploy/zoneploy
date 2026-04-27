@@ -96,9 +96,6 @@ importers:
       node-ssh:
         specifier: ^13.2.0
         version: 13.2.1
-      nodemailer:
-        specifier: ^6.9.0
-        version: 6.10.1
       otplib:
         specifier: ^13.4.0
         version: 13.4.0
@@ -136,9 +133,6 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
-      '@types/nodemailer':
-        specifier: ^6.4.0
-        version: 6.4.23
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
@@ -1450,9 +1444,6 @@ packages:
   '@types/node@22.19.17':
     resolution: {integrity: sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q==}
 
-  '@types/nodemailer@6.4.23':
-    resolution: {integrity: sha512-aFV3/NsYFLSx9mbb5gtirBSXJnAlrusoKNuPbxsASWc7vrKLmIrTQRpdcxNcSFL3VW2A2XpeLEavwb2qMi6nlQ==}
-
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
 
@@ -2345,10 +2336,6 @@ packages:
   node-ssh@13.2.1:
     resolution: {integrity: sha512-rfl4GWMygQfzlExPkQ2LWyya5n2jOBm5vhEnup+4mdw7tQhNpJWbP5ldr09Jfj93k5SfY5lxcn8od5qrQ/6mBg==}
     engines: {node: '>= 10'}
-
-  nodemailer@6.10.1:
-    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
-    engines: {node: '>=6.0.0'}
 
   normalize-path@3.0.0:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}
@@ -3930,10 +3917,6 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/nodemailer@6.4.23':
-    dependencies:
-      '@types/node': 22.19.17
-
   '@types/prop-types@15.7.15': {}
 
   '@types/qrcode@1.5.6':
@@ -4806,8 +4789,6 @@ snapshots:
       sb-scandir: 3.1.1
       shell-escape: 0.2.0
       ssh2: 1.17.0
-
-  nodemailer@6.10.1: {}
 
   normalize-path@3.0.0: {}
 

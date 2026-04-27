@@ -38,7 +38,6 @@ function canAttemptRefresh(path: string): boolean {
   if (path === '/auth/refresh') return false
   if (path === '/auth/session') return false
   if (path === '/auth/logout') return false
-  if (path.startsWith('/auth/reset-password/')) return false
   return true
 }
 

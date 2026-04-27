@@ -28,9 +28,6 @@ export const REDIS_KEYS = {
   // WebAuthn: challenges temporales (TTL 5 min)
   webauthnChallenge: (userId: string) => `rs:webauthn:challenge:${userId}`,
 
-  // Provisioning logs by server (1h TTL, used for SSE).
-  provisionLogs: (serverId: string) => `rs:provision:logs:${serverId}`,
-
   // Logs de deploy (TTL 7d). List de JSON: { message, level, ts, done? }
   // The control plane publishes here during deploys; the frontend reads via SSE.
   deployLogs: (deploymentId: string) => `rs:deploy:logs:${deploymentId}`,

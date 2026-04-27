@@ -271,12 +271,6 @@ export function LoginPage() {
 
             {/* Acciones */}
             <div className="flex flex-col gap-2">
-              <Link
-                to="/forgot-password"
-                className="text-center text-sm font-semibold text-text-secondary hover:text-primary transition-colors"
-              >
-                {t('auth.forgotPassword')}
-              </Link>
               <button
                 type="submit"
                 disabled={login.isPending}

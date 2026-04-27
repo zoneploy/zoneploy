@@ -96,11 +96,6 @@ services:
       APP_URL: ${APP_URL:-http://localhost:${WEB_PORT:-8080}}
       PLATFORM_URL: ${APP_URL:-http://localhost:${WEB_PORT:-8080}}
       ROUTING_DOMAIN: ${ROUTING_DOMAIN:-localhost}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-Zoneploy <no-reply@localhost>}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/zoneploy:/var/lib/zoneploy

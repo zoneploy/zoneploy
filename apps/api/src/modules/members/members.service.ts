@@ -87,7 +87,6 @@ export async function createMember(
           fullName: data.fullName.trim(),
           avatarUrl: null,
           status: 'active',
-          emailVerified: true,
           totpSecret: null,
           totpEnabled: false,
           deletedAt: null,
@@ -108,7 +107,6 @@ export async function createMember(
           email,
           passwordHash,
           fullName: data.fullName.trim(),
-          emailVerified: true,
         })
         .returning()
 

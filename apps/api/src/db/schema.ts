@@ -21,7 +21,6 @@ export const users = pgTable('users', {
   fullName: text('full_name').notNull(),
   avatarUrl: text('avatar_url'),
   status: text('status', { enum: ['active', 'suspended'] }).notNull().default('active'),
-  emailVerified: boolean('email_verified').notNull().default(true),
   isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
   totpSecret: text('totp_secret'),
   totpEnabled: boolean('totp_enabled').notNull().default(false),
@@ -29,17 +28,6 @@ export const users = pgTable('users', {
   deletedByUserId: uuid('deleted_by_user_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
-})
-
-// PasswordResetTokens
-
-export const passwordResetTokens = pgTable('password_reset_tokens', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  email: text('email').notNull(),
-  codeHash: text('code_hash').notNull(),
-  expiresAt: timestamp('expires_at').notNull(),
-  used: boolean('used').notNull().default(false),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
 // Organizations

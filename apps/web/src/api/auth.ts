@@ -22,5 +22,5 @@ export const authApi = {
     apiClient.post<void>('/auth/logout'),
 
   me: () =>
-    apiClient.get<{ id: string; email: string; fullName: string; avatarUrl: string | null; emailVerified: boolean }>('/auth/me'),
+    apiClient.get<{ id: string; email: string; fullName: string; avatarUrl: string | null }>('/auth/me'),
 }

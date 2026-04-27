@@ -3,7 +3,6 @@ import type { AuthResponseMfaRequired, AuthSessionResponse } from '@zoneploy/typ
 import { RegisterSchema, LoginSchema } from '@zoneploy/types'
 import { setupOwner, getSetupStatus, login, loginByUserId, refresh, logout, getMe, completeMfaWebauthn, completeMfaTotp, listSessions, revokeSession, revokeOtherSessions } from './auth.service.js'
 import { updateProfile, changePassword, setupTotp, verifyAndEnableTotp, disableTotp, getTotpStatus } from './profile.service.js'
-import { requestPasswordReset, verifyResetCode, confirmPasswordReset } from './reset.service.js'
 import { getRegistrationOptions, verifyAndSavePasskey, listPasskeys, deletePasskey, getAuthenticationOptions, verifyAuthentication } from './webauthn.service.js'
 import { authenticate } from '../../plugins/authenticate.js'
 import { AppError } from '../../lib/errors.js'
@@ -37,9 +36,6 @@ const defaultDeps = {
   verifyAndEnableTotp,
   disableTotp,
   getTotpStatus,
-  requestPasswordReset,
-  verifyResetCode,
-  confirmPasswordReset,
   getRegistrationOptions,
   verifyAndSavePasskey,
   listPasskeys,
@@ -250,45 +246,6 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
     if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'CÃ³digo requerido' } })
     try {
       const result = await deps.disableTotp(request.userId, code)
-      return reply.send(result)
-    } catch (err) {
-      if (err instanceof AppError) return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
-      throw err
-    }
-  })
-
-  // POST /auth/reset-password/request
-  app.post('/reset-password/request', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request, reply) => {
-    const { email, lang } = request.body as { email?: string; lang?: 'es' | 'en' }
-    if (!email) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Email requerido' } })
-    try {
-      const result = await deps.requestPasswordReset(email, lang ?? 'es')
-      return reply.send(result)
-    } catch (err) {
-      if (err instanceof AppError) return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
-      throw err
-    }
-  })
-
-  // POST /auth/reset-password/verify
-  app.post('/reset-password/verify', async (request, reply) => {
-    const { email, code } = request.body as { email?: string; code?: string }
-    if (!email || !code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Campos requeridos' } })
-    try {
-      const result = await deps.verifyResetCode(email, code)
-      return reply.send(result)
-    } catch (err) {
-      if (err instanceof AppError) return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
-      throw err
-    }
-  })
-
-  // POST /auth/reset-password/confirm
-  app.post('/reset-password/confirm', async (request, reply) => {
-    const { email, code, newPassword } = request.body as { email?: string; code?: string; newPassword?: string }
-    if (!email || !code || !newPassword) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Campos requeridos' } })
-    try {
-      const result = await deps.confirmPasswordReset(email, code, newPassword)
       return reply.send(result)
     } catch (err) {
       if (err instanceof AppError) return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })

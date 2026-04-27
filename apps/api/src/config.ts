@@ -26,7 +26,7 @@ const ConfigSchema = z.object({
   // AES-256-GCM encryption (exactly 32 chars = 256 bits)
   ENCRYPTION_KEY: z.string().length(32),
 
-  // Public frontend URL for emails and redirects.
+  // Public frontend URL for browser-facing links and WebAuthn origin checks.
   APP_URL: z.string().url().default('http://localhost:5173'),
 
   // Extra CORS origins separated by commas, for example local development.
@@ -48,13 +48,6 @@ const ConfigSchema = z.object({
   CUSTOM_DOMAIN_ACME_EMAIL: optionalEmail,
   CUSTOM_DOMAIN_ACME_DIRECTORY_URL: optionalUrl,
   CUSTOM_DOMAIN_RENEW_BEFORE_DAYS: z.coerce.number().int().positive().default(30),
-
-  // Email
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().default(587),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().default('Zoneploy <no-reply@zoneploy.com>'),
 
   // Wildcard cert for HTTPS (*.ROUTING_DOMAIN).
   // Directory containing cert.pem and key.pem from setup-wildcard-cert.sh.

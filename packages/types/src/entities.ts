@@ -21,7 +21,6 @@ export interface User {
   avatarUrl: string | null
   status: UserStatus
   isPlatformAdmin: boolean
-  emailVerified: boolean
   totpEnabled: boolean
   createdAt: string
   updatedAt: string

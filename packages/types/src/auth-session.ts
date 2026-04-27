@@ -10,7 +10,6 @@ export function toSessionContext(data: AuthSessionResponse): SessionContext {
       fullName: data.user.fullName,
       avatarUrl: data.user.avatarUrl,
       isPlatformAdmin: false,
-      emailVerified: data.user.emailVerified,
       totpEnabled: data.user.totpEnabled ?? false,
     },
     org: data.org

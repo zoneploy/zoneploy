@@ -5,14 +5,11 @@ import { createHmac } from 'node:crypto'
 import { WebSocket as WS } from 'ws'
 import { and, eq, isNull } from 'drizzle-orm'
 import { verifyAccessToken } from '../../lib/jwt.js'
-import { authenticate } from '../../plugins/authenticate.js'
-import { authorize, resolvePermissions } from '../../plugins/authorize.js'
+import { resolvePermissions } from '../../plugins/authorize.js'
 import { setSseCorsHeaders } from '../../lib/cors-sse.js'
 import { db } from '../../db/client.js'
 import { orgMembers, servers } from '../../db/schema.js'
 import { redis, REDIS_KEYS } from '../../lib/redis.js'
-import { getProvisionLogs } from './servers.service.js'
-import { buildProvisionLogFlush } from './server-provision-log-stream.js'
 import { getAgentAuthToken, getAgentHttpUrl, getAgentWsUrl } from '../../lib/worker-client.js'
 
 async function userHasServerPermission(orgId: string, userId: string, permission: Permission) {
@@ -27,63 +24,6 @@ async function userHasServerPermission(orgId: string, userId: string, permission
 }
 
 export async function serverRuntimeRoutes(app: FastifyInstance) {
-  app.get(
-    '/:serverId/provision-logs',
-    { preHandler: [authenticate, authorize.permission('servers:read')] },
-    async (request, reply) => {
-      const { orgId, serverId } = request.params as { orgId: string; serverId: string }
-
-      reply.hijack()
-      setSseCorsHeaders(request, reply)
-      reply.raw.setHeader('Content-Type', 'text/event-stream')
-      reply.raw.setHeader('Cache-Control', 'no-cache')
-      reply.raw.setHeader('Connection', 'keep-alive')
-      reply.raw.setHeader('X-Accel-Buffering', 'no')
-      reply.raw.writeHead(200)
-      reply.raw.flushHeaders()
-
-      let interval: ReturnType<typeof setInterval>
-
-      const end = () => {
-        clearInterval(interval)
-        if (!reply.raw.writableEnded) {
-          reply.raw.write('event: done\ndata: {}\n\n')
-          reply.raw.end()
-        }
-      }
-
-      let cursor = 0
-
-      const flush = async () => {
-        try {
-          const [entries, server] = await Promise.all([
-            getProvisionLogs(serverId),
-            db
-              .select({ status: servers.status, deletedAt: servers.deletedAt })
-              .from(servers)
-              .where(and(eq(servers.id, serverId), eq(servers.orgId, orgId)))
-              .limit(1)
-              .then(rows => rows[0] ?? null),
-          ])
-
-          const flushState = buildProvisionLogFlush({ entries, cursor, server })
-          for (const entry of flushState.newEntries) {
-            reply.raw.write(`data: ${JSON.stringify(entry)}\n\n`)
-          }
-
-          cursor = flushState.nextCursor
-          if (flushState.shouldEnd) end()
-        } catch {
-          end()
-        }
-      }
-
-      await flush()
-      interval = setInterval(flush, 800)
-      request.raw.on('close', () => clearInterval(interval))
-    },
-  )
-
   app.get(
     '/metrics/stream',
     async (request, reply) => {

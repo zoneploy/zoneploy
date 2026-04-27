@@ -194,15 +194,6 @@ CREATE TABLE IF NOT EXISTS "passkeys" (
 	CONSTRAINT "passkeys_credential_id_unique" UNIQUE("credential_id")
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "password_reset_tokens" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"email" text NOT NULL,
-	"code_hash" text NOT NULL,
-	"expires_at" timestamp NOT NULL,
-	"used" boolean DEFAULT false NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "projects" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"org_id" uuid NOT NULL,
@@ -344,7 +335,6 @@ CREATE TABLE IF NOT EXISTS "users" (
 	"full_name" text NOT NULL,
 	"avatar_url" text,
 	"status" text DEFAULT 'active' NOT NULL,
-	"email_verified" boolean DEFAULT true NOT NULL,
 	"is_platform_admin" boolean DEFAULT false NOT NULL,
 	"totp_secret" text,
 	"totp_enabled" boolean DEFAULT false NOT NULL,

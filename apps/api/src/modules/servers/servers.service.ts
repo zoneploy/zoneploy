@@ -9,10 +9,6 @@ import { AppError, NotFoundError } from '../../lib/errors.js'
 import { workerClient } from '../../lib/worker-client.js'
 import type { AgentDockerCleanupOptions, AgentDockerCleanupResult } from '../../lib/worker-client.js'
 
-export async function getProvisionLogs(_serverId: string) {
-  return []
-}
-
 type ServerRow = typeof servers.$inferSelect
 
 function normalizeServerSnapshot(server: ServerRow) {

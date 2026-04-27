@@ -30,7 +30,6 @@ function DashboardRoute() {
 }
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { SetupOwnerPage } from '@/pages/auth/SetupOwnerPage'
-import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { TermsPage } from '@/pages/legal/TermsPage'
 import { PrivacyPage } from '@/pages/legal/PrivacyPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
@@ -61,7 +60,6 @@ export const router = createBrowserRouter([
     children: [
       { path: '/login',           element: <LoginPage /> },
       { path: '/setup',           element: <SetupOwnerPage /> },
-      { path: '/forgot-password', element: <ForgotPasswordPage /> },
     ],
   },
 

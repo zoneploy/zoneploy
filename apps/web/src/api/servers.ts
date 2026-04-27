@@ -103,11 +103,6 @@ export const serversApi = {
   dockerCleanup: (orgId: string, serverId: string, options: ServerDockerCleanupOptions = {}) =>
     apiClient.post<ServerDockerCleanupResult>(`/organizations/${orgId}/servers/${serverId}/docker-cleanup`, options),
 
-  provisionLogsUrl: (orgId: string, serverId: string) => {
-    const base = import.meta.env.VITE_API_URL ?? '/api/v1'
-    return `${base}/organizations/${orgId}/servers/${serverId}/provision-logs`
-  },
-
   terminalWsUrl: (orgId: string, serverId: string) => {
     const apiUrl = (import.meta.env.VITE_API_URL ?? window.location.origin).replace(/\/api\/v1\/?$/, '')
     const wsUrl = apiUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:')
