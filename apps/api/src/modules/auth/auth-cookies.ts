@@ -19,17 +19,58 @@ function getSiteKey(url: URL): string {
   return parts.slice(-2).join('.')
 }
 
+function urlsShareSite(left: URL, right: URL): boolean {
+  return left.protocol === right.protocol && getSiteKey(left) === getSiteKey(right)
+}
+
+function getForwardedProto(request: FastifyRequest): string {
+  const forwardedProto = request.headers['x-forwarded-proto']
+  const proto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto
+  if (proto?.split(',')[0]?.trim()) {
+    return proto.split(',')[0]!.trim()
+  }
+
+  return request.protocol
+}
+
+function getEffectiveRequestUrl(request: FastifyRequest): URL | null {
+  const host = request.headers['x-forwarded-host'] ?? request.headers.host
+  const firstHost = Array.isArray(host) ? host[0] : host
+  if (!firstHost) return null
+
+  try {
+    return new URL(`${getForwardedProto(request)}://${firstHost}`)
+  } catch {
+    return null
+  }
+}
+
 function isCrossSiteRequest(request: FastifyRequest): boolean {
   const origin = request.headers.origin
   if (!origin) return false
 
   try {
     const originUrl = new URL(origin)
+    const requestUrl = getEffectiveRequestUrl(request)
+    if (requestUrl && urlsShareSite(originUrl, requestUrl)) {
+      return false
+    }
+
+    const appUrl = new URL(config.APP_URL)
+    if (urlsShareSite(originUrl, appUrl)) {
+      return false
+    }
+
     const platformUrl = new URL(config.PLATFORM_URL)
-    return originUrl.protocol !== platformUrl.protocol || getSiteKey(originUrl) !== getSiteKey(platformUrl)
+    return !urlsShareSite(originUrl, platformUrl)
   } catch {
     return false
   }
+}
+
+function isHttpsRequest(request?: FastifyRequest): boolean {
+  if (!request) return false
+  return getForwardedProto(request) === 'https'
 }
 
 function parseDurationMs(duration: string): number {
@@ -47,11 +88,12 @@ function parseDurationMs(duration: string): number {
 
 export function getRefreshCookieOptions(request?: FastifyRequest) {
   const crossSite = request ? isCrossSiteRequest(request) : false
-  const sameSite: 'lax' | 'none' = crossSite ? 'none' : 'lax'
+  const secure = isHttpsRequest(request)
+  const sameSite: 'lax' | 'none' = crossSite && secure ? 'none' : 'lax'
 
   return {
     httpOnly: true,
-    secure: crossSite || config.NODE_ENV === 'production',
+    secure,
     sameSite,
     path: '/',
     maxAge: Math.floor(parseDurationMs(config.JWT_REFRESH_EXPIRES_IN) / 1000),
