@@ -2,72 +2,80 @@
 
 Public self-hosted Zoneploy runtime.
 
-This repository will contain the installable single-VPS edition of Zoneploy: local dashboard, server agent, deploy engine, routing, add-ons and installer.
+This repository contains the installable single-VPS edition of Zoneploy: local
+dashboard, API, deploy engine, registry, routing, add-ons and installer. It is a
+standalone product and does not depend on Zoneploy Cloud.
 
 ## Goals
 
 - Install on a VPS with a single command.
-- Work standalone without Zoneploy Cloud.
-- Pair with Zoneploy Cloud when the user wants centralized management.
+- Run a local dashboard for users, roles, projects and environments.
+- Deploy containers and stacks on the same VPS.
+- Keep build artifacts in the local private registry.
+- Route public apps through local Traefik.
 - Keep runtime, add-ons and deploy contracts auditable and documented.
 
 ## Repository boundaries
 
 - Self-hosted runtime code belongs here.
-- Cloud billing, multi-tenant control plane and internal infrastructure do not belong here.
-- Shared contracts should stay clean enough to be reused by Zoneploy Cloud.
+- Cloud billing, multi-tenant control plane, remote command polling and internal
+  infrastructure do not belong here.
+- Shared contracts should stay clean enough to be reused by future products.
 
 ## Current structure
 
 ```txt
 apps/
-  agent/              Self-hosted agent CLI and future local API
+  api/                Local self-host API
+  web/                Local dashboard UI
+  agent/              Host helper CLI for diagnostics and operations
 
 packages/
   addons/             Add-on manifests and lifecycle contracts
   installer/          Installer and systemd rendering utilities
-  runtime/            Host detection, diagnostics, status and routing primitives
+  runtime/            Docker, Traefik, registry, diagnostics and deploy runtime
   types/              Public contracts shared across packages
+
+deploy/
+  docker-compose.yml  Local self-host stack for API, Web, Postgres, Redis,
+                      registry and Traefik
 ```
 
 ## Agent commands
 
-The initial agent skeleton exposes JSON commands that will remain stable as the runtime is implemented:
+The host helper exposes JSON commands for diagnostics, local builds and local
+deployment operations:
 
 ```bash
-node apps/agent/dist/index.js status
-node apps/agent/dist/index.js pairing
-node apps/agent/dist/index.js pair --cloud-url https://api.zoneploy.com --token <one-time-token>
-node apps/agent/dist/index.js routes
-node apps/agent/dist/index.js addons
-node apps/agent/dist/index.js pairing
-node apps/agent/dist/index.js preflight
-node apps/agent/dist/index.js debug
-node apps/agent/dist/index.js audit
-node apps/agent/dist/index.js build --app demo --context /path/to/app
-node apps/agent/dist/index.js cloud-sync
-node apps/agent/dist/index.js cleanup --apply
-node apps/agent/dist/index.js releases
-node apps/agent/dist/index.js deploy --app demo --release <release-id> --port 3000
-node apps/agent/dist/index.js deployments
-node apps/agent/dist/index.js stop --deployment demo
-node apps/agent/dist/index.js start --deployment demo
-node apps/agent/dist/index.js restart --deployment demo
-node apps/agent/dist/index.js logs --deployment demo --tail 100
-node apps/agent/dist/index.js route --deployment demo --host demo.example.com
-node apps/agent/dist/index.js rollback --deployment demo --release <release-id>
-node apps/agent/dist/index.js remove --deployment demo
-node apps/agent/dist/index.js serve
-node apps/agent/dist/index.js update
-node apps/agent/dist/index.js repair
-node apps/agent/dist/index.js uninstall
+zoneploy-agent status
+zoneploy-agent routes
+zoneploy-agent addons
+zoneploy-agent preflight
+zoneploy-agent debug
+zoneploy-agent audit
+zoneploy-agent build --app demo --context /path/to/app
+zoneploy-agent cleanup --apply
+zoneploy-agent releases
+zoneploy-agent deploy --app demo --release <release-id> --port 3000
+zoneploy-agent deployments
+zoneploy-agent stop --deployment demo
+zoneploy-agent start --deployment demo
+zoneploy-agent restart --deployment demo
+zoneploy-agent logs --deployment demo --tail 100
+zoneploy-agent route --deployment demo --host demo.example.com
+zoneploy-agent rollback --deployment demo --release <release-id>
+zoneploy-agent remove --deployment demo
+zoneploy-agent serve
+zoneploy-agent update
+zoneploy-agent repair
+zoneploy-agent uninstall
 ```
 
 ## Self-Hosted Install
 
-The public installer is designed to be idempotent. It installs Node.js, pnpm and
-Docker, builds the local source, writes `/etc/zoneploy/config/agent.env`,
-registers `zoneploy-agent.service` and installs command shims under
+The public installer is designed to be idempotent. It installs the host
+prerequisites, builds the local source, writes `/etc/zoneploy/config/agent.env`,
+starts the local Docker Compose stack and installs command shims under
 `/usr/local/bin`.
 
 ```bash
@@ -91,9 +99,13 @@ zoneploy-agent uninstall
 zoneploy-agent uninstall --purge
 ```
 
-The installer also starts a local Docker registry on `127.0.0.1:5000` by
-default. Builds should push images there so the VPS owns its deploy artifacts
-and can keep rollback candidates without consuming Zoneploy Cloud storage.
+Updates are always manual. Zoneploy does not schedule unattended self-updates.
+Upgrade only when you explicitly run `zoneploy-agent update` on the host.
+
+The installer starts a local Docker registry on `127.0.0.1:5000` by default.
+Builds push images there so the VPS owns its deploy artifacts and can keep
+rollback candidates without consuming external storage.
+
 It also starts a local Traefik edge as `zoneploy-traefik` on HTTP port `80` by
 default. Use `--skip-traefik` or `ZONEPLOY_TRAEFIK_ENABLED=false` if another
 reverse proxy owns the public port.
@@ -122,10 +134,6 @@ sudo env \
   bash install.sh
 ```
 
-These values are written to `/etc/zoneploy/config/agent.env` so a future local
-dashboard or Zoneploy Cloud pairing can expose the same policy without changing
-the runtime contract.
-
 ## Local Build Releases
 
 The self-hosted runtime can build Docker images on the VPS, push them to the
@@ -146,10 +154,6 @@ zoneploy-agent rollback --deployment demo-api --release <previous-release-id>
 zoneploy-agent remove --deployment demo-api
 zoneploy-agent cleanup
 zoneploy-agent cleanup --apply
-zoneploy-agent pairing
-zoneploy-agent pair --cloud-url https://api.zoneploy.com --token <one-time-token>
-zoneploy-agent unpair
-zoneploy-agent cloud-sync
 ```
 
 Images are tagged as:
@@ -158,62 +162,23 @@ Images are tagged as:
 127.0.0.1:5000/zoneploy/<app-id>:<release-id>
 ```
 
-This keeps rollback candidates on the user's VPS instead of using Zoneploy
-Cloud storage or bandwidth.
+This keeps rollback candidates on the user's VPS.
 
-### GitHub Action deploys
+## Local Dashboard Direction
 
-Use the deploy token generated by Zoneploy as `ZP_DEPLOY_TOKEN`. The action does
-not push images to Zoneploy Cloud. It sends the repository/ref/context to Cloud,
-then the paired self-hosted VPS clones the repo, builds the Docker image locally,
-pushes it to its local registry and deploys that release.
+The local API and Web apps are being adapted from the Cloud UI to a single-VPS
+self-host product. The final flow is:
 
-```yaml
-name: Deploy to Zoneploy
+1. First boot creates the owner user.
+2. The owner invites users and assigns local roles.
+3. Projects and environments group containers and stacks.
+4. Git providers are configured locally so private repositories can be cloned
+   and built on the VPS.
+5. Custom app domains point directly to the VPS and are terminated by local
+   Traefik.
 
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: zoneploy/zoneploy-action@development
-        with:
-          api-url: https://api.dev.zoneploy.com/api/v1
-          deploy-token: ${{ secrets.ZP_DEPLOY_TOKEN }}
-          github-token: ${{ github.token }}
-          context: .
-          dockerfile: Dockerfile
-```
-
-For public repositories, `github-token` can be omitted. For private repositories,
-the token is delivered to the paired agent for a single command and is removed
-from persisted Cloud command history once the agent reports the result.
-
-Local deploys are intentionally driven from a ready release. The deploy command
-replaces the previous managed container for the same app, runs the new image on
-the `zoneploy` Docker network and stores deployment metadata under
-`/var/lib/zoneploy/deployments`.
-
-Routes are stored under `/etc/zoneploy/runtime-routes` and rendered to Traefik's
-dynamic file provider at `/etc/zoneploy/traefik/dynamic/zoneploy.yml`.
-Removing a deployment also removes its attached routes and rewrites the Traefik
-dynamic config to avoid stale hosts.
-
-Paired mode uses an outbound polling model. The agent exchanges a one-time
-pairing token for an agent token, stores it in `/etc/zoneploy/config/agent.env`
-with `0600` permissions, then polls Zoneploy Cloud for typed commands. This
-means Cloud control does not require exposing the agent HTTP port publicly.
-Use `zoneploy-agent cloud-sync` to force one polling cycle immediately when
-testing pairing or queued commands.
-
-Cleanup defaults to dry-run. Use `--apply` to delete release metadata, local
-Docker images and local registry manifests according to the configured count and
-age retention policy. Active deployment releases are always protected.
+Public registry push from CI is intentionally out of this initial scope. The
+default registry remains private on `127.0.0.1`.
 
 ## License
 
@@ -227,4 +192,3 @@ pnpm typecheck
 pnpm build
 pnpm test
 ```
-

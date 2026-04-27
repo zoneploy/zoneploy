@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "paths": {
+      "@zoneploy/addons": ["../../packages/addons/dist/index.d.ts"],
+      "@zoneploy/runtime": ["../../packages/runtime/dist/index.d.ts"],
+      "@zoneploy/types": ["../../packages/types/dist/index.d.ts"]
+    }
+  },
+  "include": ["src"]
+}

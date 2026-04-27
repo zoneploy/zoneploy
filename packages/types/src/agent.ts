@@ -1,4 +1,4 @@
-export type AgentMode = "standalone" | "paired";
+export type AgentMode = "standalone";
 
 export type HealthState = "unknown" | "healthy" | "degraded" | "unhealthy";
 
@@ -27,13 +27,6 @@ export type AgentRuntimeConfig = {
   traefikHttpPort: number;
   traefikDir: string;
   traefikDynamicDir: string;
-  cloudUrl?: string;
-  instanceId?: string;
-  agentToken?: string;
-  pairedAt?: string;
-  commandPollIntervalSeconds: number;
-  pairingTokenSet: boolean;
-  agentTokenSet: boolean;
 };
 
 export type CleanupPolicy = {

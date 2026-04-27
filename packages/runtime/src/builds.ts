@@ -78,6 +78,22 @@ const normalizeRef = (ref?: string): string | undefined => {
   return value.replace(/^refs\/heads\//, "").replace(/^refs\/tags\//, "");
 };
 
+const buildGitCloneError = (source: LocalGitSource, output: string): Error => {
+  const repository = source.repository.trim();
+  const hasToken = Boolean(source.token?.trim());
+  const isGitHubRepository = /^https:\/\/github\.com\//i.test(repository);
+  const authenticationFailed = /Authentication failed|Invalid username or token|could not read Username/i.test(output);
+
+  if (isGitHubRepository && authenticationFailed) {
+    const tokenHint = hasToken
+      ? "The provided Git token was rejected. For GitHub Actions, pass github-token: ${{ github.token }} and set permissions: contents: read, or use a PAT with repository read access."
+      : "No Git token was provided. For private GitHub repositories, pass github-token: ${{ github.token }} and set permissions: contents: read.";
+    return new Error(`GitHub repository clone failed. ${tokenHint}\n${output}`);
+  }
+
+  return new Error(output || "Git clone failed.");
+};
+
 export const checkoutGitSource = async (
   source: LocalGitSource,
   releaseId: string,
@@ -121,7 +137,7 @@ export const checkoutGitSource = async (
     });
 
     if (clone.exitCode !== 0) {
-      throw new Error(clone.stderr || clone.stdout || "Git clone failed.");
+      throw buildGitCloneError(source, clone.stderr || clone.stdout || "Git clone failed.");
     }
 
     if (source.commitSha?.trim()) {

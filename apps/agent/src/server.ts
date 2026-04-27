@@ -1,10 +1,9 @@
 import http from "node:http";
 import crypto from "node:crypto";
-import { ensureAgentPairing, loadAgentRuntimeConfig } from "@zoneploy/runtime";
+import { loadAgentRuntimeConfig } from "@zoneploy/runtime";
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
 import { runLocalBuild } from "./builds.js";
-import { startCloudCommandWorker } from "./cloud-worker.js";
 import { runLocalCleanup } from "./cleanup.js";
 import {
   getDeploymentSnapshot,
@@ -14,14 +13,12 @@ import {
   runLocalDeploymentRemove,
 } from "./deployments.js";
 import { getDebugReport } from "./debug.js";
-import { getPairingState } from "./pairing.js";
 import { getPreflightReport } from "./preflight.js";
 import { getReleaseSnapshot } from "./releases.js";
 import { runLocalRollback } from "./rollback.js";
 import { getRouteSnapshot } from "./routes.js";
 import { runLocalRoute } from "./routes.js";
 import { getAgentStatus } from "./status.js";
-import { agentVersion } from "./version.js";
 
 type JsonHandler = (request: http.IncomingMessage) => Promise<unknown> | unknown;
 type JsonRoute = {
@@ -149,7 +146,6 @@ const routeHandlers = new Map<string, JsonRoute>([
       },
     },
   ],
-  ["/pairing", { method: "GET", handler: getPairingState }],
   [
     "/actions/build",
     {
@@ -226,16 +222,7 @@ const routeHandlers = new Map<string, JsonRoute>([
 ]);
 
 export const startAgentServer = async (): Promise<number> => {
-  try {
-    await ensureAgentPairing(agentVersion);
-  } catch (error) {
-    console.warn(
-      `Zoneploy cloud pairing failed: ${error instanceof Error ? error.message : "unknown error"}`,
-    );
-  }
-
   const config = loadAgentRuntimeConfig();
-  const cloudWorker = startCloudCommandWorker();
 
   const server = http.createServer((request, response) => {
     void (async () => {
@@ -286,7 +273,6 @@ export const startAgentServer = async (): Promise<number> => {
     });
 
     const shutdown = (): void => {
-      cloudWorker.stop();
       server.close(() => resolve(0));
     };
 

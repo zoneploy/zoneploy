@@ -1,0 +1,135 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-zoneploy}
+      POSTGRES_USER: ${POSTGRES_USER:-zoneploy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - /var/lib/zoneploy/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zoneploy} -d ${POSTGRES_DB:-zoneploy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - zoneploy
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - /var/lib/zoneploy/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - zoneploy
+
+  registry:
+    image: registry:2
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${REGISTRY_PORT:-5000}:5000"
+    environment:
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /var/lib/registry
+    volumes:
+      - /var/lib/zoneploy/registry:/var/lib/registry
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5000/v2/ >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zoneploy
+
+  traefik:
+    image: traefik:v3
+    restart: unless-stopped
+    command:
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--providers.file.directory=/etc/zoneploy/traefik/dynamic"
+      - "--providers.file.watch=true"
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+      - "${TRAEFIK_HTTPS_PORT:-443}:443"
+    volumes:
+      - /etc/zoneploy/traefik/dynamic:/etc/zoneploy/traefik/dynamic:ro
+    healthcheck:
+      test: ["CMD-SHELL", "traefik healthcheck --ping=false || exit 0"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zoneploy
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      registry:
+        condition: service_started
+      traefik:
+        condition: service_started
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-zoneploy}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zoneploy}
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      APP_URL: ${APP_URL:-http://localhost:${WEB_PORT:-8080}}
+      PLATFORM_URL: ${APP_URL:-http://localhost:${WEB_PORT:-8080}}
+      ROUTING_DOMAIN: ${ROUTING_DOMAIN:-localhost}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-Zoneploy <no-reply@localhost>}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/zoneploy:/var/lib/zoneploy
+      - /etc/zoneploy:/etc/zoneploy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zoneploy
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zoneploy
+
+networks:
+  zoneploy:
+    name: zoneploy

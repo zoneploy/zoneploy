@@ -24,7 +24,7 @@ test("installer renders default filesystem paths", () => {
   assert.equal(paths.traefikDynamicDir, "/etc/zoneploy/traefik/dynamic");
 });
 
-test("installer renders agent environment without leaking unset pairing values", () => {
+test("installer renders agent environment without cloud values", () => {
   const env = renderAgentEnvironment({
     profile: "standalone",
     agentPort: 4000,
@@ -45,14 +45,15 @@ test("installer renders agent environment without leaking unset pairing values",
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_RELEASES=5/);
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_DAYS=14/);
   assert.match(env, /ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=20/);
-  assert.match(env, /ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS=30/);
   assert.doesNotMatch(env, /ZONEPLOY_AGENT_API_TOKEN/);
+  assert.doesNotMatch(env, /ZONEPLOY_CLOUD_URL/);
   assert.doesNotMatch(env, /ZONEPLOY_PAIRING_TOKEN/);
+  assert.doesNotMatch(env, /ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS/);
 });
 
 test("installer renders configurable registry and cleanup policy", () => {
   const env = renderAgentEnvironment({
-    profile: "paired",
+    profile: "standalone",
     agentPort: 4100,
     agentApiToken: "agent-api-token-test",
     registryHost: "127.0.0.1",
@@ -63,7 +64,6 @@ test("installer renders configurable registry and cleanup policy", () => {
       keepDays: 30,
       maxRegistryGb: 80,
     },
-    commandPollIntervalSeconds: 45,
     paths: createDefaultInstallPaths(),
   });
 
@@ -74,7 +74,6 @@ test("installer renders configurable registry and cleanup policy", () => {
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_RELEASES=9/);
   assert.match(env, /ZONEPLOY_CLEANUP_KEEP_DAYS=30/);
   assert.match(env, /ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=80/);
-  assert.match(env, /ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS=45/);
 });
 
 test("installer renders a systemd service for the persistent agent server", () => {

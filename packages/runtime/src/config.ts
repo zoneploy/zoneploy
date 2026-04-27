@@ -26,17 +26,8 @@ const readCleanupNumber = (value: string | undefined, fallback: number): number 
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-const readIntervalSeconds = (value: string | undefined, fallback: number): number => {
-  if (!value) {
-    return fallback;
-  }
-
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 5 && parsed <= 3600 ? parsed : fallback;
-};
-
 const readProfile = (value: string | undefined): AgentMode => {
-  return value === "paired" ? "paired" : "standalone";
+  return "standalone";
 };
 
 const optionalValue = (value: string | undefined): string | undefined => {
@@ -85,15 +76,5 @@ export const loadAgentRuntimeConfig = (
     traefikHttpPort: readNumber(env.ZONEPLOY_TRAEFIK_HTTP_PORT, 80),
     traefikDir,
     traefikDynamicDir: optionalValue(env.ZONEPLOY_TRAEFIK_DYNAMIC_DIR) ?? `${traefikDir}/dynamic`,
-    cloudUrl: optionalValue(env.ZONEPLOY_CLOUD_URL),
-    instanceId: optionalValue(env.ZONEPLOY_INSTANCE_ID),
-    agentToken: optionalValue(env.ZONEPLOY_AGENT_TOKEN),
-    pairedAt: optionalValue(env.ZONEPLOY_PAIRED_AT),
-    commandPollIntervalSeconds: readIntervalSeconds(
-      env.ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS,
-      30,
-    ),
-    pairingTokenSet: Boolean(optionalValue(env.ZONEPLOY_PAIRING_TOKEN)),
-    agentTokenSet: Boolean(optionalValue(env.ZONEPLOY_AGENT_TOKEN)),
   };
 };

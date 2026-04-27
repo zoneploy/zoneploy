@@ -25,21 +25,32 @@ ZONEPLOY_CLEANUP_KEEP_DAYS="${ZONEPLOY_CLEANUP_KEEP_DAYS:-14}"
 ZONEPLOY_CLEANUP_MAX_REGISTRY_GB="${ZONEPLOY_CLEANUP_MAX_REGISTRY_GB:-20}"
 ZONEPLOY_TRAEFIK_ENABLED="${ZONEPLOY_TRAEFIK_ENABLED:-true}"
 ZONEPLOY_TRAEFIK_HTTP_PORT="${ZONEPLOY_TRAEFIK_HTTP_PORT:-80}"
+ZONEPLOY_TRAEFIK_HTTPS_PORT="${ZONEPLOY_TRAEFIK_HTTPS_PORT:-443}"
 ZONEPLOY_TRAEFIK_DIR="${ZONEPLOY_TRAEFIK_DIR:-/etc/zoneploy/traefik}"
 ZONEPLOY_TRAEFIK_DYNAMIC_DIR="${ZONEPLOY_TRAEFIK_DYNAMIC_DIR:-${ZONEPLOY_TRAEFIK_DIR}/dynamic}"
 ZONEPLOY_PROFILE="${ZONEPLOY_PROFILE:-standalone}"
-ZONEPLOY_CLOUD_URL="${ZONEPLOY_CLOUD_URL:-}"
-ZONEPLOY_PAIRING_TOKEN="${ZONEPLOY_PAIRING_TOKEN:-}"
-ZONEPLOY_INSTANCE_ID="${ZONEPLOY_INSTANCE_ID:-}"
-ZONEPLOY_AGENT_TOKEN="${ZONEPLOY_AGENT_TOKEN:-}"
-ZONEPLOY_PAIRED_AT="${ZONEPLOY_PAIRED_AT:-}"
-ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS="${ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS:-30}"
+ZONEPLOY_WEB_PORT="${ZONEPLOY_WEB_PORT:-8080}"
+POSTGRES_DB="${POSTGRES_DB:-zoneploy}"
+POSTGRES_USER="${POSTGRES_USER:-zoneploy}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
+JWT_ACCESS_SECRET="${JWT_ACCESS_SECRET:-}"
+JWT_REFRESH_SECRET="${JWT_REFRESH_SECRET:-}"
+ENCRYPTION_KEY="${ENCRYPTION_KEY:-}"
+APP_URL_WAS_PROVIDED="${APP_URL+x}"
+APP_URL="${APP_URL:-http://localhost:${ZONEPLOY_WEB_PORT}}"
+ROUTING_DOMAIN="${ROUTING_DOMAIN:-localhost}"
+SMTP_HOST="${SMTP_HOST:-}"
+SMTP_PORT="${SMTP_PORT:-587}"
+SMTP_USER="${SMTP_USER:-}"
+SMTP_PASS="${SMTP_PASS:-}"
+SMTP_FROM="${SMTP_FROM:-Zoneploy <no-reply@localhost>}"
 ZONEPLOY_SKIP_DOCKER="${ZONEPLOY_SKIP_DOCKER:-false}"
 
 ACTION="install"
 PURGE_DATA="false"
 SERVICE_NAME="zoneploy-agent"
 ENV_FILE="${ZONEPLOY_CONFIG_DIR}/agent.env"
+STACK_ENV_FILE="${ZONEPLOY_CONFIG_DIR}/selfhost.env"
 PNPM_VERSION="9.15.0"
 PACKAGE_MANAGER="unknown"
 PACKAGE_CACHE_UPDATED="false"
@@ -72,14 +83,12 @@ Commands:
 
 Options:
   --agent-port <port>       Agent HTTP port. Default: 4000
+  --web-port <port>         Local dashboard HTTP port. Default: 8080
   --registry-port <port>    Local registry port. Default: 5000
   --http-port <port>        Local Traefik HTTP port. Default: 80
+  --https-port <port>       Local Traefik HTTPS port. Default: 443
   --ref <git-ref>           Git ref to install. Default: development
   --repo <url>              Git repository URL. Default: https://github.com/zoneploy/zoneploy.git
-  --paired                  Configure the agent as paired with Zoneploy Cloud
-  --cloud-url <url>         Zoneploy Cloud API URL for paired mode
-  --pairing-token <token>   One-time pairing token for paired mode
-  --poll-interval <seconds> Cloud command polling interval. Default: 30
   --skip-docker             Do not install or start Docker
   --skip-traefik            Do not start the local Traefik edge
   --purge                   With uninstall, also remove config, data and logs
@@ -102,6 +111,13 @@ while [ "$#" -gt 0 ]; do
       ZONEPLOY_AGENT_PORT="${2:?--agent-port requires a value}"
       shift 2
       ;;
+    --web-port)
+      ZONEPLOY_WEB_PORT="${2:?--web-port requires a value}"
+      if [ -z "$APP_URL_WAS_PROVIDED" ]; then
+        APP_URL="http://localhost:${ZONEPLOY_WEB_PORT}"
+      fi
+      shift 2
+      ;;
     --ref)
       ZONEPLOY_INSTALL_REF="${2:?--ref requires a value}"
       shift 2
@@ -114,24 +130,12 @@ while [ "$#" -gt 0 ]; do
       ZONEPLOY_TRAEFIK_HTTP_PORT="${2:?--http-port requires a value}"
       shift 2
       ;;
+    --https-port)
+      ZONEPLOY_TRAEFIK_HTTPS_PORT="${2:?--https-port requires a value}"
+      shift 2
+      ;;
     --repo)
       ZONEPLOY_REPO_URL="${2:?--repo requires a value}"
-      shift 2
-      ;;
-    --paired)
-      ZONEPLOY_PROFILE="paired"
-      shift
-      ;;
-    --cloud-url)
-      ZONEPLOY_CLOUD_URL="${2:?--cloud-url requires a value}"
-      shift 2
-      ;;
-    --pairing-token)
-      ZONEPLOY_PAIRING_TOKEN="${2:?--pairing-token requires a value}"
-      shift 2
-      ;;
-    --poll-interval)
-      ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS="${2:?--poll-interval requires a value}"
       shift 2
       ;;
     --skip-docker)
@@ -243,8 +247,8 @@ require_supported_host() {
   esac
 
   case "$ZONEPLOY_PROFILE" in
-    standalone|paired) ;;
-    *) fail "ZONEPLOY_PROFILE must be standalone or paired." ;;
+    standalone) ;;
+    *) fail "ZONEPLOY_PROFILE must be standalone." ;;
   esac
 
   case "$ZONEPLOY_AGENT_PORT" in
@@ -253,6 +257,13 @@ require_supported_host() {
 
   [ "$ZONEPLOY_AGENT_PORT" -ge 1 ] && [ "$ZONEPLOY_AGENT_PORT" -le 65535 ] \
     || fail "ZONEPLOY_AGENT_PORT must be between 1 and 65535."
+
+  case "$ZONEPLOY_WEB_PORT" in
+    ''|*[!0-9]*) fail "ZONEPLOY_WEB_PORT must be a TCP port number." ;;
+  esac
+
+  [ "$ZONEPLOY_WEB_PORT" -ge 1 ] && [ "$ZONEPLOY_WEB_PORT" -le 65535 ] \
+    || fail "ZONEPLOY_WEB_PORT must be between 1 and 65535."
 
   case "$ZONEPLOY_REGISTRY_PORT" in
     ''|*[!0-9]*) fail "ZONEPLOY_REGISTRY_PORT must be a TCP port number." ;;
@@ -272,27 +283,26 @@ require_supported_host() {
   [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" -ge 1 ] && [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" -le 65535 ] \
     || fail "ZONEPLOY_TRAEFIK_HTTP_PORT must be between 1 and 65535."
 
-  if [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" = "$ZONEPLOY_AGENT_PORT" ] \
-    || [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" = "$ZONEPLOY_REGISTRY_PORT" ]; then
-    fail "ZONEPLOY_TRAEFIK_HTTP_PORT must be different from agent and registry ports."
-  fi
-
-  if [ "$ZONEPLOY_PROFILE" = "paired" ] && [ -z "$ZONEPLOY_CLOUD_URL" ]; then
-    fail "Paired mode requires --cloud-url or ZONEPLOY_CLOUD_URL."
-  fi
-
-  if [ "$ZONEPLOY_PROFILE" = "paired" ] \
-    && [ -z "$ZONEPLOY_PAIRING_TOKEN" ] \
-    && [ -z "$ZONEPLOY_AGENT_TOKEN" ]; then
-    fail "Paired mode requires --pairing-token or an existing ZONEPLOY_AGENT_TOKEN."
-  fi
-
-  case "$ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS" in
-    ''|*[!0-9]*) fail "ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS must be a number." ;;
+  case "$ZONEPLOY_TRAEFIK_HTTPS_PORT" in
+    ''|*[!0-9]*) fail "ZONEPLOY_TRAEFIK_HTTPS_PORT must be a TCP port number." ;;
   esac
 
-  [ "$ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS" -ge 5 ] && [ "$ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS" -le 3600 ] \
-    || fail "ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS must be between 5 and 3600."
+  [ "$ZONEPLOY_TRAEFIK_HTTPS_PORT" -ge 1 ] && [ "$ZONEPLOY_TRAEFIK_HTTPS_PORT" -le 65535 ] \
+    || fail "ZONEPLOY_TRAEFIK_HTTPS_PORT must be between 1 and 65535."
+
+  if [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" = "$ZONEPLOY_AGENT_PORT" ] \
+    || [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" = "$ZONEPLOY_REGISTRY_PORT" ] \
+    || [ "$ZONEPLOY_TRAEFIK_HTTP_PORT" = "$ZONEPLOY_WEB_PORT" ]; then
+    fail "ZONEPLOY_TRAEFIK_HTTP_PORT must be different from agent, web and registry ports."
+  fi
+
+  if [ "$ZONEPLOY_TRAEFIK_HTTPS_PORT" = "$ZONEPLOY_AGENT_PORT" ] \
+    || [ "$ZONEPLOY_TRAEFIK_HTTPS_PORT" = "$ZONEPLOY_REGISTRY_PORT" ] \
+    || [ "$ZONEPLOY_TRAEFIK_HTTPS_PORT" = "$ZONEPLOY_WEB_PORT" ] \
+    || [ "$ZONEPLOY_TRAEFIK_HTTPS_PORT" = "$ZONEPLOY_TRAEFIK_HTTP_PORT" ]; then
+    fail "ZONEPLOY_TRAEFIK_HTTPS_PORT must be different from agent, web, registry and HTTP ports."
+  fi
+
 }
 
 install_base_packages() {
@@ -482,6 +492,58 @@ generate_secret() {
   fail "Could not generate a secure agent API token. Install openssl and retry."
 }
 
+generate_32_char_secret() {
+  if command_exists openssl; then
+    openssl rand -hex 16
+    return
+  fi
+
+  if [ -r /dev/urandom ] && command_exists od; then
+    od -An -N16 -tx1 /dev/urandom | tr -d ' \n'
+    return
+  fi
+
+  fail "Could not generate a secure encryption key. Install openssl and retry."
+}
+
+load_existing_config() {
+  if [ -f "$ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
+  fi
+
+  if [ -f "$STACK_ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$STACK_ENV_FILE"
+    set +a
+  fi
+}
+
+ensure_runtime_secrets() {
+  if [ -z "$ZONEPLOY_AGENT_API_TOKEN" ]; then
+    ZONEPLOY_AGENT_API_TOKEN="$(generate_secret)"
+  fi
+
+  if [ -z "$POSTGRES_PASSWORD" ]; then
+    POSTGRES_PASSWORD="$(generate_secret)"
+  fi
+
+  if [ -z "$JWT_ACCESS_SECRET" ]; then
+    JWT_ACCESS_SECRET="$(generate_secret)"
+  fi
+
+  if [ -z "$JWT_REFRESH_SECRET" ]; then
+    JWT_REFRESH_SECRET="$(generate_secret)"
+  fi
+
+  if [ -z "$ENCRYPTION_KEY" ]; then
+    ENCRYPTION_KEY="$(generate_32_char_secret)"
+  fi
+}
+
 ensure_agent_api_token() {
   if [ -n "$ZONEPLOY_AGENT_API_TOKEN" ]; then
     return
@@ -519,21 +581,42 @@ ZONEPLOY_DEPLOYMENTS_DIR=$(shell_quote "$ZONEPLOY_DEPLOYMENTS_DIR")
 ZONEPLOY_APPS_DIR=$(shell_quote "$ZONEPLOY_APPS_DIR")
 ZONEPLOY_TRAEFIK_ENABLED=$(shell_quote "$ZONEPLOY_TRAEFIK_ENABLED")
 ZONEPLOY_TRAEFIK_HTTP_PORT=$(shell_quote "$ZONEPLOY_TRAEFIK_HTTP_PORT")
+ZONEPLOY_TRAEFIK_HTTPS_PORT=$(shell_quote "$ZONEPLOY_TRAEFIK_HTTPS_PORT")
 ZONEPLOY_TRAEFIK_DIR=$(shell_quote "$ZONEPLOY_TRAEFIK_DIR")
 ZONEPLOY_TRAEFIK_DYNAMIC_DIR=$(shell_quote "$ZONEPLOY_TRAEFIK_DYNAMIC_DIR")
 ZONEPLOY_CLEANUP_ENABLED=$(shell_quote "$ZONEPLOY_CLEANUP_ENABLED")
 ZONEPLOY_CLEANUP_KEEP_RELEASES=$(shell_quote "$ZONEPLOY_CLEANUP_KEEP_RELEASES")
 ZONEPLOY_CLEANUP_KEEP_DAYS=$(shell_quote "$ZONEPLOY_CLEANUP_KEEP_DAYS")
 ZONEPLOY_CLEANUP_MAX_REGISTRY_GB=$(shell_quote "$ZONEPLOY_CLEANUP_MAX_REGISTRY_GB")
-ZONEPLOY_CLOUD_URL=$(shell_quote "$ZONEPLOY_CLOUD_URL")
-ZONEPLOY_PAIRING_TOKEN=$(shell_quote "$ZONEPLOY_PAIRING_TOKEN")
-ZONEPLOY_INSTANCE_ID=$(shell_quote "$ZONEPLOY_INSTANCE_ID")
-ZONEPLOY_AGENT_TOKEN=$(shell_quote "$ZONEPLOY_AGENT_TOKEN")
-ZONEPLOY_PAIRED_AT=$(shell_quote "$ZONEPLOY_PAIRED_AT")
-ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS=$(shell_quote "$ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS")
 ENV
   chmod 600 "$ENV_FILE"
   ok "Wrote $ENV_FILE"
+}
+
+write_stack_env_file() {
+  install -d -m 0700 "$ZONEPLOY_CONFIG_DIR"
+  umask 077
+  cat > "$STACK_ENV_FILE" <<ENV
+POSTGRES_DB=$(shell_quote "$POSTGRES_DB")
+POSTGRES_USER=$(shell_quote "$POSTGRES_USER")
+POSTGRES_PASSWORD=$(shell_quote "$POSTGRES_PASSWORD")
+JWT_ACCESS_SECRET=$(shell_quote "$JWT_ACCESS_SECRET")
+JWT_REFRESH_SECRET=$(shell_quote "$JWT_REFRESH_SECRET")
+ENCRYPTION_KEY=$(shell_quote "$ENCRYPTION_KEY")
+APP_URL=$(shell_quote "$APP_URL")
+ROUTING_DOMAIN=$(shell_quote "$ROUTING_DOMAIN")
+WEB_PORT=$(shell_quote "$ZONEPLOY_WEB_PORT")
+REGISTRY_PORT=$(shell_quote "$ZONEPLOY_REGISTRY_PORT")
+TRAEFIK_HTTP_PORT=$(shell_quote "$ZONEPLOY_TRAEFIK_HTTP_PORT")
+TRAEFIK_HTTPS_PORT=$(shell_quote "$ZONEPLOY_TRAEFIK_HTTPS_PORT")
+SMTP_HOST=$(shell_quote "$SMTP_HOST")
+SMTP_PORT=$(shell_quote "$SMTP_PORT")
+SMTP_USER=$(shell_quote "$SMTP_USER")
+SMTP_PASS=$(shell_quote "$SMTP_PASS")
+SMTP_FROM=$(shell_quote "$SMTP_FROM")
+ENV
+  chmod 600 "$STACK_ENV_FILE"
+  ok "Wrote $STACK_ENV_FILE"
 }
 
 write_command_shims() {
@@ -619,14 +702,8 @@ SHIM
 exec zoneploy-agent preflight "$@"
 SHIM
 
-  cat > /usr/local/bin/zoneploy-agent-pairing <<'SHIM'
-#!/usr/bin/env sh
-exec zoneploy-agent pairing "$@"
-SHIM
-
   chmod +x /usr/local/bin/zoneploy-agent \
     /usr/local/bin/zoneploy-agent-status \
-    /usr/local/bin/zoneploy-agent-pairing \
     /usr/local/bin/zoneploy-agent-debug \
     /usr/local/bin/zoneploy-agent-audit \
     /usr/local/bin/zoneploy-agent-preflight \
@@ -688,12 +765,8 @@ open_agent_port() {
   fi
 }
 
-open_traefik_port() {
-  if [ "$ZONEPLOY_TRAEFIK_ENABLED" != "true" ]; then
-    return
-  fi
-
-  local port="${ZONEPLOY_TRAEFIK_HTTP_PORT}/tcp"
+open_web_port() {
+  local port="${ZONEPLOY_WEB_PORT}/tcp"
 
   if command_exists ufw && ufw status 2>/dev/null | grep -q "Status: active"; then
     ufw allow "$port" >/dev/null 2>&1 || true
@@ -709,10 +782,93 @@ open_traefik_port() {
   fi
 
   if command_exists iptables; then
-    iptables -C INPUT -p tcp --dport "$ZONEPLOY_TRAEFIK_HTTP_PORT" -j ACCEPT >/dev/null 2>&1 \
-      || iptables -I INPUT -p tcp --dport "$ZONEPLOY_TRAEFIK_HTTP_PORT" -j ACCEPT >/dev/null 2>&1 || true
+    iptables -C INPUT -p tcp --dport "$ZONEPLOY_WEB_PORT" -j ACCEPT >/dev/null 2>&1 \
+      || iptables -I INPUT -p tcp --dport "$ZONEPLOY_WEB_PORT" -j ACCEPT >/dev/null 2>&1 || true
     ok "Allowed ${port} through iptables"
   fi
+}
+
+open_traefik_port() {
+  if [ "$ZONEPLOY_TRAEFIK_ENABLED" != "true" ]; then
+    return
+  fi
+
+  local port="${ZONEPLOY_TRAEFIK_HTTP_PORT}/tcp"
+  local https_port="${ZONEPLOY_TRAEFIK_HTTPS_PORT}/tcp"
+
+  if command_exists ufw && ufw status 2>/dev/null | grep -q "Status: active"; then
+    ufw allow "$port" >/dev/null 2>&1 || true
+    ufw allow "$https_port" >/dev/null 2>&1 || true
+    ok "Allowed ${port} through ufw"
+    ok "Allowed ${https_port} through ufw"
+    return
+  fi
+
+  if command_exists firewall-cmd && systemctl is-active firewalld >/dev/null 2>&1; then
+    firewall-cmd --permanent --add-port="$port" >/dev/null 2>&1 || true
+    firewall-cmd --permanent --add-port="$https_port" >/dev/null 2>&1 || true
+    firewall-cmd --reload >/dev/null 2>&1 || true
+    ok "Allowed ${port} through firewalld"
+    ok "Allowed ${https_port} through firewalld"
+    return
+  fi
+
+  if command_exists iptables; then
+    iptables -C INPUT -p tcp --dport "$ZONEPLOY_TRAEFIK_HTTP_PORT" -j ACCEPT >/dev/null 2>&1 \
+      || iptables -I INPUT -p tcp --dport "$ZONEPLOY_TRAEFIK_HTTP_PORT" -j ACCEPT >/dev/null 2>&1 || true
+    iptables -C INPUT -p tcp --dport "$ZONEPLOY_TRAEFIK_HTTPS_PORT" -j ACCEPT >/dev/null 2>&1 \
+      || iptables -I INPUT -p tcp --dport "$ZONEPLOY_TRAEFIK_HTTPS_PORT" -j ACCEPT >/dev/null 2>&1 || true
+    ok "Allowed ${port} through iptables"
+    ok "Allowed ${https_port} through iptables"
+  fi
+}
+
+compose_file() {
+  printf '%s/deploy/docker-compose.yml' "$ZONEPLOY_SOURCE_DIR"
+}
+
+compose_cmd() {
+  docker compose --env-file "$STACK_ENV_FILE" -p zoneploy -f "$(compose_file)" "$@"
+}
+
+prepare_traefik_dynamic_config() {
+  install -d -m 0755 "$ZONEPLOY_TRAEFIK_DIR" "$ZONEPLOY_TRAEFIK_DYNAMIC_DIR"
+
+  if [ ! -f "${ZONEPLOY_TRAEFIK_DYNAMIC_DIR}/zoneploy.yml" ]; then
+    cat > "${ZONEPLOY_TRAEFIK_DYNAMIC_DIR}/zoneploy.yml" <<TRAEFIK_DYNAMIC
+http:
+  routers: {}
+  services: {}
+TRAEFIK_DYNAMIC
+  fi
+}
+
+start_zoneploy_stack() {
+  if [ "$ZONEPLOY_SKIP_DOCKER" = "true" ]; then
+    warn "Skipping Zoneploy stack because Docker installation was skipped."
+    return
+  fi
+
+  [ -f "$(compose_file)" ] || fail "Compose file not found at $(compose_file)."
+
+  prepare_traefik_dynamic_config
+  compose_cmd up -d --build
+
+  echo -n "Waiting for Zoneploy web"
+  for _ in $(seq 1 40); do
+    if curl -fsS "http://127.0.0.1:${ZONEPLOY_WEB_PORT}/health" >/dev/null 2>&1; then
+      echo ""
+      ok "Zoneploy web is healthy"
+      return
+    fi
+    echo -n "."
+    sleep 2
+  done
+
+  echo ""
+  compose_cmd ps || true
+  compose_cmd logs --tail=80 api web || true
+  fail "Zoneploy web did not become healthy."
 }
 
 start_local_registry() {
@@ -831,6 +987,9 @@ safe_rm_rf() {
 
 uninstall_zoneploy() {
   echo "Uninstalling Zoneploy..."
+  if [ -f "$(compose_file)" ] && [ -f "$STACK_ENV_FILE" ] && command_exists docker; then
+    compose_cmd down --remove-orphans >/dev/null 2>&1 || true
+  fi
   systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
   systemctl disable "$SERVICE_NAME" >/dev/null 2>&1 || true
   docker rm -f zoneploy-registry >/dev/null 2>&1 || true
@@ -840,7 +999,6 @@ uninstall_zoneploy() {
 
   rm -f /usr/local/bin/zoneploy-agent \
     /usr/local/bin/zoneploy-agent-status \
-    /usr/local/bin/zoneploy-agent-pairing \
     /usr/local/bin/zoneploy-agent-preflight \
     /usr/local/bin/zoneploy-agent-debug \
     /usr/local/bin/zoneploy-agent-audit \
@@ -878,27 +1036,28 @@ print_summary() {
 ========================================
  Profile:      ${ZONEPLOY_PROFILE}
  Source:       ${ZONEPLOY_SOURCE_DIR}
- Config:       ${ENV_FILE}
- Service:      ${SERVICE_NAME}
- Agent API:    http://${host_ip}:${ZONEPLOY_AGENT_PORT}
+ Agent config: ${ENV_FILE}
+ Stack config: ${STACK_ENV_FILE}
+ Dashboard:    http://${host_ip}:${ZONEPLOY_WEB_PORT}
  Registry:     http://${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}
- Traefik:      enabled=${ZONEPLOY_TRAEFIK_ENABLED}, httpPort=${ZONEPLOY_TRAEFIK_HTTP_PORT}
+ Traefik:      enabled=${ZONEPLOY_TRAEFIK_ENABLED}, httpPort=${ZONEPLOY_TRAEFIK_HTTP_PORT}, httpsPort=${ZONEPLOY_TRAEFIK_HTTPS_PORT}
  Cleanup:      enabled=${ZONEPLOY_CLEANUP_ENABLED}, keepReleases=${ZONEPLOY_CLEANUP_KEEP_RELEASES}, keepDays=${ZONEPLOY_CLEANUP_KEEP_DAYS}, maxRegistryGb=${ZONEPLOY_CLEANUP_MAX_REGISTRY_GB}
 
 Commands:
   zoneploy-agent-status
-  zoneploy-agent-pairing
   zoneploy-agent-preflight
   zoneploy-agent-debug
   zoneploy-agent-audit
   zoneploy-agent-update
   zoneploy-agent-repair
   zoneploy-agent-uninstall
-  journalctl -u ${SERVICE_NAME} -f
+  docker compose --env-file ${STACK_ENV_FILE} -p zoneploy -f ${ZONEPLOY_SOURCE_DIR}/deploy/docker-compose.yml logs -f
 
 SUMMARY
 }
 
+load_existing_config
+ensure_runtime_secrets
 require_supported_host
 
 echo ""
@@ -910,9 +1069,9 @@ echo "  Repo:        ${ZONEPLOY_REPO_URL}"
 echo "  Ref:         ${ZONEPLOY_INSTALL_REF}"
 echo "  Profile:     ${ZONEPLOY_PROFILE}"
 echo "  Agent port:  ${ZONEPLOY_AGENT_PORT}"
+echo "  Web port:    ${ZONEPLOY_WEB_PORT}"
 echo "  Registry:    ${ZONEPLOY_REGISTRY_HOST}:${ZONEPLOY_REGISTRY_PORT}"
-echo "  Traefik:     enabled=${ZONEPLOY_TRAEFIK_ENABLED}, httpPort=${ZONEPLOY_TRAEFIK_HTTP_PORT}"
-echo "  Cloud:       profile=${ZONEPLOY_PROFILE}, pollInterval=${ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS}s"
+echo "  Traefik:     enabled=${ZONEPLOY_TRAEFIK_ENABLED}, httpPort=${ZONEPLOY_TRAEFIK_HTTP_PORT}, httpsPort=${ZONEPLOY_TRAEFIK_HTTPS_PORT}"
 echo "  Package mgr: ${PACKAGE_MANAGER}"
 echo ""
 
@@ -928,11 +1087,9 @@ install_docker
 prepare_source
 build_source
 write_env_file
+write_stack_env_file
 write_command_shims
-write_systemd_service
-start_local_registry
-start_local_traefik
-open_agent_port
+start_zoneploy_stack
+open_web_port
 open_traefik_port
-start_agent_service
 print_summary

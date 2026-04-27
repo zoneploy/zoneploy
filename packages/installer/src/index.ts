@@ -1,4 +1,4 @@
-export type InstallProfile = "standalone" | "paired";
+export type InstallProfile = "standalone";
 
 export type AgentInstallPaths = {
   homeDir: string;
@@ -33,12 +33,6 @@ export type AgentEnvironmentOptions = {
   registryPort?: number;
   cleanupPolicy?: CleanupPolicyOptions;
   paths: AgentInstallPaths;
-  cloudUrl?: string;
-  pairingToken?: string;
-  instanceId?: string;
-  agentToken?: string;
-  pairedAt?: string;
-  commandPollIntervalSeconds?: number;
 };
 
 export type SystemdServiceOptions = {
@@ -125,12 +119,6 @@ export const renderAgentEnvironment = (options: AgentEnvironmentOptions): string
     envLine("ZONEPLOY_CLEANUP_KEEP_RELEASES", cleanupPolicy.keepReleases),
     envLine("ZONEPLOY_CLEANUP_KEEP_DAYS", cleanupPolicy.keepDays),
     envLine("ZONEPLOY_CLEANUP_MAX_REGISTRY_GB", cleanupPolicy.maxRegistryGb),
-    envLine("ZONEPLOY_CLOUD_URL", options.cloudUrl),
-    envLine("ZONEPLOY_PAIRING_TOKEN", options.pairingToken),
-    envLine("ZONEPLOY_INSTANCE_ID", options.instanceId),
-    envLine("ZONEPLOY_AGENT_TOKEN", options.agentToken),
-    envLine("ZONEPLOY_PAIRED_AT", options.pairedAt),
-    envLine("ZONEPLOY_COMMAND_POLL_INTERVAL_SECONDS", options.commandPollIntervalSeconds ?? 30),
   ].filter((line): line is string => line !== null);
 
   return `${lines.join("\n")}\n`;
