@@ -831,6 +831,19 @@ compose_cmd() {
   docker compose --env-file "$STACK_ENV_FILE" -p zoneploy -f "$(compose_file)" "$@"
 }
 
+assert_zoneploy_stack_created() {
+  local services
+  services="$(compose_cmd ps --all --services 2>/dev/null || true)"
+
+  if printf '%s\n' "$services" | grep -qx 'web'; then
+    return
+  fi
+
+  compose_cmd ps --all || true
+  compose_cmd logs --tail=80 || true
+  fail "Zoneploy stack did not create the web service."
+}
+
 prepare_traefik_dynamic_config() {
   install -d -m 0755 "$ZONEPLOY_TRAEFIK_DIR" "$ZONEPLOY_TRAEFIK_DYNAMIC_DIR"
 
@@ -853,6 +866,7 @@ start_zoneploy_stack() {
 
   prepare_traefik_dynamic_config
   compose_cmd up -d --build
+  assert_zoneploy_stack_created
 
   echo -n "Waiting for Zoneploy web"
   for _ in $(seq 1 40); do
@@ -1089,7 +1103,10 @@ build_source
 write_env_file
 write_stack_env_file
 write_command_shims
+write_systemd_service
+start_agent_service
 start_zoneploy_stack
+open_agent_port
 open_web_port
 open_traefik_port
 print_summary

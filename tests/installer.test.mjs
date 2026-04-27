@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   createDefaultInstallPaths,
@@ -112,4 +113,13 @@ test("installer renders operation shim through a temporary install script copy",
   assert.match(shim, /bash "\$tmp" update "\$@"/);
   assert.match(shim, /set -e/);
   assert.match(shim, /rm -f "\$tmp"/);
+});
+
+test("install script starts the self-host services before reporting success", async () => {
+  const script = await readFile(new URL("../install.sh", import.meta.url), "utf8");
+
+  assert.match(script, /write_command_shims\nwrite_systemd_service\nstart_agent_service\nstart_zoneploy_stack\nopen_agent_port/);
+  assert.match(script, /assert_zoneploy_stack_created\(\)/);
+  assert.match(script, /compose_cmd ps --all --services/);
+  assert.match(script, /Zoneploy stack did not create the web service/);
 });
