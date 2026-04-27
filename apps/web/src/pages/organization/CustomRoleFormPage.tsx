@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Check, Save, Shield } from 'lucide-react'
 import type { Permission } from '@zoneploy/types'
 import { customRolesApi, type CustomRole } from '@/api/customRoles'
-import { organizationsApi } from '@/api/organizations'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -55,18 +54,10 @@ export function CustomRoleFormPage() {
   const { can } = usePermissions()
   const canManage = can('members:manage')
 
-  const orgQuery = useQuery({
-    queryKey: ['organization', orgId],
-    queryFn: () => organizationsApi.get(orgId),
-    enabled: !!orgId,
-  })
-  const isFreePlan = orgQuery.data?.subscription?.planSlug === 'free'
-  const planKnown = !!orgQuery.data?.subscription
-
   const roleQuery = useQuery({
     queryKey: ['custom-roles', orgId, roleId],
     queryFn: () => customRolesApi.get(orgId, roleId!),
-    enabled: !!orgId && isEditing && canManage && planKnown && !isFreePlan,
+    enabled: !!orgId && isEditing && canManage,
   })
 
   const {
@@ -143,21 +134,6 @@ export function CustomRoleFormPage() {
         icon={Shield}
         title={t('customRoles.forbiddenTitle')}
         subtitle={t('customRoles.forbiddenSubtitle')}
-      />
-    )
-  }
-
-  if (orgQuery.isLoading) {
-    return <LoadingState />
-  }
-
-  if (isFreePlan) {
-    return (
-      <EmptyState
-        icon={Shield}
-        title={t('customRoles.paidPlanOnlyTitle')}
-        subtitle={t('customRoles.paidPlanOnlySubtitle')}
-        action={{ label: t('customRoles.backToRoles'), onClick: () => navigate('/custom-roles'), icon: <ArrowLeft size={13} /> }}
       />
     )
   }

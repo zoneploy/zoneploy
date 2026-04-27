@@ -13,7 +13,6 @@ import type { TFunction } from 'i18next'
 import { z } from 'zod'
 import { membersApi } from '@/api/members'
 import { customRolesApi, type CustomRole } from '@/api/customRoles'
-import { organizationsApi } from '@/api/organizations'
 import { useAuthStore } from '@/stores/auth'
 import { usePermissions } from '@/hooks/usePermissions'
 import { Button } from '@/components/ui/button'
@@ -700,12 +699,7 @@ export function MembersPage() {
   const canInvite = can('members:invite')
   const canManage = can('members:manage')
 
-  const { data: org } = useQuery({
-    queryKey: ['organization', orgId],
-    queryFn: () => organizationsApi.get(orgId),
-    enabled: !!orgId,
-  })
-  const canUseCustomRoles = canManage && !!org?.subscription && org.subscription.planSlug !== 'free'
+  const canUseCustomRoles = canManage
 
   const { data: customRoles = [] } = useQuery({
     queryKey: ['custom-roles', orgId],

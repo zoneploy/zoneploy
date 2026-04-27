@@ -7,7 +7,6 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { useAuthStore } from '@/stores/auth'
 import { usePermissions } from '@/hooks/usePermissions'
 import { customRolesApi, type CustomRole } from '@/api/customRoles'
-import { organizationsApi } from '@/api/organizations'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Card } from '@/components/ui/card'
@@ -24,14 +23,6 @@ export function CustomRolesPage() {
 
   const { can } = usePermissions()
   const canManage = can('members:manage')
-
-  const { data: org } = useQuery({
-    queryKey: ['organization', orgId],
-    queryFn: () => organizationsApi.get(orgId),
-    enabled: !!orgId,
-  })
-  const isFreePlan = org?.subscription?.planSlug === 'free'
-  const canManagePaidFeature = canManage && !isFreePlan
 
   const { data: roles = [], isLoading } = useQuery({
     queryKey: ['custom-roles', orgId],
@@ -54,7 +45,7 @@ export function CustomRolesPage() {
       <PageHeader
         title={t('customRoles.title')}
         subtitle={t('customRoles.subtitle')}
-        action={canManagePaidFeature && (
+        action={canManage && (
           <Button onClick={() => navigate('/custom-roles/new')}>
             <Plus size={14} />{t('customRoles.create')}
           </Button>
@@ -79,8 +70,8 @@ export function CustomRolesPage() {
             <EmptyState
               icon={Shield}
               title={t('customRoles.empty')}
-              subtitle={isFreePlan ? t('customRoles.paidPlanOnlySubtitle') : t('customRoles.emptySubtitle')}
-              action={canManagePaidFeature ? { label: t('customRoles.create'), onClick: () => navigate('/custom-roles/new'), icon: <Plus size={13} /> } : undefined}
+              subtitle={t('customRoles.emptySubtitle')}
+              action={canManage ? { label: t('customRoles.create'), onClick: () => navigate('/custom-roles/new'), icon: <Plus size={13} /> } : undefined}
             />
           ) : (
             <div className="overflow-x-auto">
@@ -116,7 +107,7 @@ export function CustomRolesPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        {canManagePaidFeature && (
+                        {canManage && (
                           <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost" size="icon"
