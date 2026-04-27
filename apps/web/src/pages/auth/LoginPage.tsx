@@ -8,7 +8,6 @@ import { Eye, EyeOff } from 'lucide-react'
 import { startAuthentication } from '@simplewebauthn/browser'
 import { LoginSchema, type LoginInput } from '@zoneploy/types'
 import { AuthLayout } from '@/components/layout/AuthLayout'
-import { SocialAuthButtons } from '@/components/shared/SocialAuthButtons'
 import { getPostLoginPath, useLogin } from '@/hooks/useAuth'
 import { useAuthStore } from '@/stores/auth'
 import { apiClient, ApiError } from '@/lib/api-client'
@@ -207,8 +206,6 @@ export function LoginPage() {
         </div>
 
         <div className="flex flex-col gap-5">
-          <SocialAuthButtons />
-
           {/* Formulario */}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             {showVerificationPending && !blockedEmail && (

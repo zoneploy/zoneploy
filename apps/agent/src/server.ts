@@ -19,6 +19,7 @@ import { runLocalRollback } from "./rollback.js";
 import { getRouteSnapshot } from "./routes.js";
 import { runLocalRoute } from "./routes.js";
 import { getAgentStatus } from "./status.js";
+import { handleTerminalUpgrade } from "./terminal.js";
 
 type JsonHandler = (request: http.IncomingMessage) => Promise<unknown> | unknown;
 type JsonRoute = {
@@ -264,6 +265,14 @@ export const startAgentServer = async (): Promise<number> => {
         });
       }
     })();
+  });
+  server.on("upgrade", (request, socket, head) => {
+    if (handleTerminalUpgrade(config, request, socket, head)) {
+      return;
+    }
+
+    socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+    socket.destroy();
   });
 
   return new Promise((resolve, reject) => {

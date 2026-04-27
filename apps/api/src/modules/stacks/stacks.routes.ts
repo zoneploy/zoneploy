@@ -10,7 +10,6 @@ import { authorize as defaultAuthorize, resolvePermissions } from '../../plugins
 import { AppError } from '../../lib/errors.js'
 import { audit as defaultAudit } from '../../lib/audit.js'
 import { setSseCorsHeaders } from '../../lib/cors-sse.js'
-import { decrypt } from '../../lib/crypto.js'
 import { verifyAccessToken } from '../../lib/jwt.js'
 import { db } from '../../db/client.js'
 import { orgMembers } from '../../db/schema.js'
@@ -48,7 +47,7 @@ import {
   getCurrentStackServiceMetrics,
   getStackServiceMetricsHistory,
 } from './stacks.service.js'
-import { getAgentHttpUrl, getAgentWsUrl } from '../../lib/worker-client.js'
+import { getAgentAuthToken, getAgentHttpUrl, getAgentWsUrl } from '../../lib/worker-client.js'
 
 interface StackRouteDeps {
   authenticate?: typeof defaultAuthenticate
@@ -571,7 +570,7 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
 
     try {
       const { stack, server } = await getStackForStreaming(orgId, stackId)
-      const agentToken = decrypt({ encrypted: server.agentTokenEncrypted, iv: server.agentTokenIv, authTag: server.agentTokenAuthTag })
+      const agentToken = getAgentAuthToken(server)
 
       setSseCorsHeaders(req, reply)
       reply.raw.setHeader('Content-Type', 'text/event-stream')
@@ -661,7 +660,7 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
 
     try {
       const { stack, server } = await getStackForStreaming(orgId, stackId)
-      const agentToken = decrypt({ encrypted: server.agentTokenEncrypted, iv: server.agentTokenIv, authTag: server.agentTokenAuthTag })
+      const agentToken = getAgentAuthToken(server)
 
       const agentUrl = getAgentHttpUrl(server, `/agent/v1/stacks/${stack.id}/${stack.projectName}/services/${serviceName}/logs?tail=${tail}`)
       const agentRes = await fetch(agentUrl, {
@@ -729,7 +728,14 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
         return
       }
 
-      let serverData: { ipAddress: string; agentPort: number; agentTokenEncrypted: string; agentTokenIv: string; agentTokenAuthTag: string }
+      let serverData: {
+        ipAddress: string
+        agentPort: number
+        agentMode: 'legacy' | 'self_hosted'
+        agentTokenEncrypted: string
+        agentTokenIv: string
+        agentTokenAuthTag: string
+      }
       let stackData: { id: string; projectName: string }
       try {
         const { stack, server } = await getStackForStreaming(orgId, stackId)
@@ -740,7 +746,7 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
         return
       }
 
-      const agentToken = decrypt({ encrypted: serverData.agentTokenEncrypted, iv: serverData.agentTokenIv, authTag: serverData.agentTokenAuthTag })
+      const agentToken = getAgentAuthToken(serverData)
       const ts = Date.now()
       const hmacPayload = `${stackData.projectName}:${serviceName}:${ts}`
       const sig = createHmac('sha256', agentToken).update(hmacPayload).digest('hex')

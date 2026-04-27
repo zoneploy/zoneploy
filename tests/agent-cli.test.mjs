@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
+import { WebSocket } from "ws";
 
 const runAgent = (command) => {
   const output = execFileSync("node", ["apps/agent/dist/index.js", command], {
@@ -226,4 +227,44 @@ test("agent serve command protects diagnostic endpoints with an API token", asyn
 
   assert.equal(cleanup.status, 200);
   assert.equal(cleanupBody.dryRun, true);
+});
+
+test("agent terminal websocket requires a signed terminal token", async (t) => {
+  const port = 48_000 + Math.floor(Math.random() * 1_000);
+  const token = "agent-api-token-test";
+  const child = spawn("node", ["apps/agent/dist/index.js", "serve"], {
+    env: {
+      ...process.env,
+      ZONEPLOY_AGENT_PORT: String(port),
+      ZONEPLOY_AGENT_API_TOKEN: token,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  t.after(() => {
+    child.kill("SIGTERM");
+  });
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/health`);
+      if (response.ok) break;
+    } catch {
+      await sleep(100);
+    }
+  }
+
+  const statusCode = await new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/agent/v1/server/terminal?token=bad`);
+    ws.on("unexpected-response", (_request, response) => {
+      resolve(response.statusCode);
+    });
+    ws.on("open", () => {
+      ws.close();
+      reject(new Error("terminal websocket unexpectedly opened"));
+    });
+    ws.on("error", reject);
+  });
+
+  assert.equal(statusCode, 401);
 });

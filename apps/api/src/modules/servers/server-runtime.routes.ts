@@ -4,7 +4,6 @@ import type { OrgRole, Permission } from '@zoneploy/types'
 import { createHmac } from 'node:crypto'
 import { WebSocket as WS } from 'ws'
 import { and, eq, isNull } from 'drizzle-orm'
-import { decrypt } from '../../lib/crypto.js'
 import { verifyAccessToken } from '../../lib/jwt.js'
 import { authenticate } from '../../plugins/authenticate.js'
 import { authorize, resolvePermissions } from '../../plugins/authorize.js'
@@ -14,7 +13,7 @@ import { orgMembers, servers } from '../../db/schema.js'
 import { redis, REDIS_KEYS } from '../../lib/redis.js'
 import { getProvisionLogs } from './servers.service.js'
 import { buildProvisionLogFlush } from './server-provision-log-stream.js'
-import { getAgentHttpUrl, getAgentWsUrl } from '../../lib/worker-client.js'
+import { getAgentAuthToken, getAgentHttpUrl, getAgentWsUrl } from '../../lib/worker-client.js'
 
 async function userHasServerPermission(orgId: string, userId: string, permission: Permission) {
   const [member] = await db
@@ -161,11 +160,7 @@ export async function serverRuntimeRoutes(app: FastifyInstance) {
       if (!server) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Server not found' } })
       if (server.status !== 'online') return reply.status(503).send({ error: { code: 'UNAVAILABLE', message: 'Server is not online' } })
 
-      const agentToken = decrypt({
-        encrypted: server.agentTokenEncrypted,
-        iv: server.agentTokenIv,
-        authTag: server.agentTokenAuthTag,
-      })
+      const agentToken = getAgentAuthToken(server)
 
       setSseCorsHeaders(request, reply)
       reply.raw.setHeader('Content-Type', 'text/event-stream')
@@ -241,11 +236,7 @@ export async function serverRuntimeRoutes(app: FastifyInstance) {
         return
       }
 
-      const agentToken = decrypt({
-        encrypted: server.agentTokenEncrypted,
-        iv: server.agentTokenIv,
-        authTag: server.agentTokenAuthTag,
-      })
+      const agentToken = getAgentAuthToken(server)
       const ts = Date.now()
       const hmacPayload = `${server.id}:${ts}`
       const sig = createHmac('sha256', agentToken).update(hmacPayload).digest('hex')

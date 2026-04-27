@@ -10,12 +10,11 @@ import { authorize as defaultAuthorize, resolvePermissions } from '../../plugins
 import { AppError } from '../../lib/errors.js'
 import { audit as defaultAudit } from '../../lib/audit.js'
 import { setSseCorsHeaders } from '../../lib/cors-sse.js'
-import { decrypt } from '../../lib/crypto.js'
 import { verifyAccessToken } from '../../lib/jwt.js'
 import { db } from '../../db/client.js'
 import { containerDeployments, containers, servers, orgMembers } from '../../db/schema.js'
 import { redis, REDIS_KEYS } from '../../lib/redis.js'
-import { getAgentHttpUrl, getAgentWsUrl } from '../../lib/worker-client.js'
+import { getAgentAuthToken, getAgentHttpUrl, getAgentWsUrl } from '../../lib/worker-client.js'
 import {
   listContainers,
   getContainer,
@@ -355,7 +354,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
 
     try {
       const { container, server } = await getContainerForStreaming(orgId, containerId)
-      const agentToken = decrypt({ encrypted: server.agentTokenEncrypted, iv: server.agentTokenIv, authTag: server.agentTokenAuthTag })
+      const agentToken = getAgentAuthToken(server)
       const agentUrl = getAgentHttpUrl(server, `/agent/v1/containers/${container.dockerId}/files?path=${encodeURIComponent(path)}`)
       const agentRes = await fetch(agentUrl, {
         headers: { Authorization: `Bearer ${agentToken}` },
@@ -416,11 +415,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
       return reply.status(503).send({ error: { code: 'UNAVAILABLE', message: 'Servidor no disponible' } })
     }
 
-    const agentToken = decrypt({
-      encrypted: server.agentTokenEncrypted,
-      iv: server.agentTokenIv,
-      authTag: server.agentTokenAuthTag,
-    })
+    const agentToken = getAgentAuthToken(server)
 
     setSseCorsHeaders(req, reply)
     reply.raw.setHeader('Content-Type', 'text/event-stream')
@@ -553,11 +548,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
 
     try {
       const { container, server } = await getContainerForStreaming(orgId, containerId)
-      const agentToken = decrypt({
-        encrypted: server.agentTokenEncrypted,
-        iv: server.agentTokenIv,
-        authTag: server.agentTokenAuthTag,
-      })
+      const agentToken = getAgentAuthToken(server)
 
       const agentUrl = getAgentHttpUrl(server, `/agent/v1/containers/${containerId}/logs?tail=${tail}`)
       const agentRes = await fetch(agentUrl, {
@@ -633,7 +624,14 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
       }
 
       // Resolve the target container and server before opening the agent tunnel.
-      let serverData: { ipAddress: string; agentPort: number; agentTokenEncrypted: string; agentTokenIv: string; agentTokenAuthTag: string }
+      let serverData: {
+        ipAddress: string
+        agentPort: number
+        agentMode: 'legacy' | 'self_hosted'
+        agentTokenEncrypted: string
+        agentTokenIv: string
+        agentTokenAuthTag: string
+      }
       try {
         const { server } = await getContainerForStreaming(orgId, containerId)
         serverData = server
@@ -643,11 +641,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
       }
 
       // Generate HMAC token for the agent.
-      const agentToken = decrypt({
-        encrypted: serverData.agentTokenEncrypted,
-        iv: serverData.agentTokenIv,
-        authTag: serverData.agentTokenAuthTag,
-      })
+      const agentToken = getAgentAuthToken(serverData)
       const ts = Date.now()
       const hmacPayload = `${containerId}:${ts}`
       const sig = createHmac('sha256', agentToken).update(hmacPayload).digest('hex')

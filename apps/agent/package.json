@@ -16,6 +16,10 @@
   "dependencies": {
     "@zoneploy/types": "workspace:*",
     "@zoneploy/runtime": "workspace:*",
-    "@zoneploy/addons": "workspace:*"
+    "@zoneploy/addons": "workspace:*",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
   }
 }

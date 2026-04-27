@@ -1,4 +1,5 @@
 import { decrypt } from './crypto.js'
+import { config } from '../config.js'
 import type { servers } from '../db/schema.js'
 import {
   buildAndDeployGitImage,
@@ -26,6 +27,10 @@ import {
 } from '@zoneploy/runtime'
 
 type Server = typeof servers.$inferSelect
+type AgentAuthServer = Pick<
+  Server,
+  'agentMode' | 'agentTokenEncrypted' | 'agentTokenIv' | 'agentTokenAuthTag'
+>
 
 export interface PortMapping {
   port: number
@@ -247,7 +252,11 @@ class WorkerClientError extends Error {
   }
 }
 
-function getAgentToken(server: Server): string {
+export function getAgentAuthToken(server: AgentAuthServer): string {
+  if (server.agentMode === 'self_hosted' && config.ZONEPLOY_AGENT_API_TOKEN) {
+    return config.ZONEPLOY_AGENT_API_TOKEN
+  }
+
   return decrypt({
     encrypted: server.agentTokenEncrypted,
     iv: server.agentTokenIv,
@@ -259,12 +268,20 @@ function getAgentPort(server: Pick<Server, 'agentPort'>) {
   return server.agentPort || 4000
 }
 
-export function getAgentHttpUrl(server: Pick<Server, 'ipAddress' | 'agentPort'>, path = '') {
-  return `http://${server.ipAddress}:${getAgentPort(server)}${path}`
+function getAgentHost(server: Pick<Server, 'ipAddress' | 'agentMode'>) {
+  return server.agentMode === 'self_hosted' ? config.LOCAL_AGENT_HOST : server.ipAddress
 }
 
-export function getAgentWsUrl(server: Pick<Server, 'ipAddress' | 'agentPort'>, path = '') {
-  return `ws://${server.ipAddress}:${getAgentPort(server)}${path}`
+function getEffectiveAgentPort(server: Pick<Server, 'agentMode' | 'agentPort'>) {
+  return server.agentMode === 'self_hosted' ? config.LOCAL_AGENT_PORT : getAgentPort(server)
+}
+
+export function getAgentHttpUrl(server: Pick<Server, 'ipAddress' | 'agentPort' | 'agentMode'>, path = '') {
+  return `http://${getAgentHost(server)}:${getEffectiveAgentPort(server)}${path}`
+}
+
+export function getAgentWsUrl(server: Pick<Server, 'ipAddress' | 'agentPort' | 'agentMode'>, path = '') {
+  return `ws://${getAgentHost(server)}:${getEffectiveAgentPort(server)}${path}`
 }
 
 async function agentRequest<T>(
@@ -273,7 +290,7 @@ async function agentRequest<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const token = getAgentToken(server)
+  const token = getAgentAuthToken(server)
   const url = getAgentHttpUrl(server, path)
 
   const response = await fetch(url, {

@@ -37,6 +37,9 @@ const ConfigSchema = z.object({
   // Defaults to the same host on the backend port.
   PLATFORM_URL: z.string().url().default('http://localhost:3000'),
   SELF_HOSTED_INSTALL_URL: z.string().url().default('https://raw.githubusercontent.com/zoneploy/zoneploy/development/install.sh'),
+  ZONEPLOY_AGENT_API_TOKEN: optionalString,
+  LOCAL_AGENT_HOST: z.string().default('host.docker.internal'),
+  LOCAL_AGENT_PORT: z.coerce.number().default(4000),
 
   // Domain suffix used for Zoneploy-managed public routes.
   ROUTING_DOMAIN: z.string().default('zoneploy.app'),

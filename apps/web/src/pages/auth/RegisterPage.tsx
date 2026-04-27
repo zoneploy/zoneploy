@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next'
 import { Eye, EyeOff } from 'lucide-react'
 import { RegisterSchema, type RegisterInput } from '@zoneploy/types'
 import { AuthLayout } from '@/components/layout/AuthLayout'
-import { SocialAuthButtons } from '@/components/shared/SocialAuthButtons'
 import { useRegister } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { getApiError } from '@/lib/errors'
@@ -38,8 +37,6 @@ export function RegisterPage() {
         </div>
 
         <div className="flex flex-col gap-5">
-          <SocialAuthButtons />
-
           {/* Formulario */}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             {/* Error global */}
