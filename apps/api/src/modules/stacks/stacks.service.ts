@@ -254,13 +254,13 @@ async function getStackRow(orgId: string, stackId: string) {
     .where(and(eq(stacks.id, stackId), eq(stacks.orgId, orgId), isNull(stacks.deletedAt)))
     .limit(1)
 
-  if (!stack) throw new NotFoundError('Stack no encontrado')
+  if (!stack) throw new NotFoundError('Stack not found')
   return stack
 }
 
 async function getStackAndServer(orgId: string, stackId: string) {
   const stack = await getStackRow(orgId, stackId)
-  if (!stack.serverId) throw new ForbiddenError('El stack no tiene Servidor asignado')
+  if (!stack.serverId) throw new ForbiddenError('The stack does not have a server assigned')
 
   const [server] = await db
     .select()
@@ -268,7 +268,7 @@ async function getStackAndServer(orgId: string, stackId: string) {
     .where(eq(servers.id, stack.serverId))
     .limit(1)
 
-  if (!server) throw new NotFoundError('Servidor no encontrado')
+  if (!server) throw new NotFoundError('Server not found')
   if (server.status !== 'online' && server.agentMode !== 'self_hosted') throw new ForbiddenError('Server is not online')
 
   return { stack, server }
@@ -587,7 +587,7 @@ export async function createStack(orgId: string, input: CreateStackInput) {
     })
     .returning()
 
-  if (!stack) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear el Stack')
+  if (!stack) throw new AppError(500, 'INTERNAL_ERROR', 'Could not create the stack')
 
   const projectName = `rs-${stack.id.slice(0, 8)}`
   const [updated] = await db
@@ -596,7 +596,7 @@ export async function createStack(orgId: string, input: CreateStackInput) {
     .where(eq(stacks.id, stack.id))
     .returning()
 
-  if (!updated) throw new AppError(500, 'INTERNAL_ERROR', 'Error al actualizar el Stack')
+  if (!updated) throw new AppError(500, 'INTERNAL_ERROR', 'Could not update the stack')
 
   return { ...formatStack(updated), deployToken }
 }
@@ -651,7 +651,7 @@ export async function deployStack(
 ) {
   const stack = await getStackRow(orgId, stackId)
   if (stack.status === 'deploying') throw new ValidationError('Stack is already being deployed')
-  if (!stack.serverId) throw new ValidationError('El Stack no tiene un Servidor asignado')
+  if (!stack.serverId) throw new ValidationError('The stack does not have a server assigned')
 
   const [server] = await db
     .select()
@@ -659,7 +659,7 @@ export async function deployStack(
     .where(and(eq(servers.id, stack.serverId), eq(servers.orgId, orgId)))
     .limit(1)
 
-  if (!server) throw new NotFoundError('Server no encontrado')
+  if (!server) throw new NotFoundError('Server not found')
   if (server.status !== 'online' && server.agentMode !== 'self_hosted') throw new AppError(409, 'SERVER_UNAVAILABLE', 'Server is not online')
   const registryUser = registry?.registryUser
   const registryPassword = registry?.registryPassword
@@ -691,7 +691,7 @@ export async function deployStack(
     })
     .returning()
 
-  if (!deployment) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear el deployment del stack')
+  if (!deployment) throw new AppError(500, 'INTERNAL_ERROR', 'Could not create the stack deployment')
 
   pruneStackDeploymentHistory(stackId, 20).catch(() => null)
 
@@ -768,7 +768,7 @@ export async function deployStackByToken(
     .where(and(eq(stacks.deployTokenHash, hash), isNull(stacks.deletedAt)))
     .limit(1)
 
-  if (!stack) throw new NotFoundError('Token inválido o revocado')
+  if (!stack) throw new NotFoundError('Invalid or revoked token')
 
   return deployStack(stack.orgId, stack.id, composeContent, 'ci-cd', undefined, options)
 }
@@ -837,7 +837,7 @@ export async function deleteStackSecret(orgId: string, stackId: string, key: str
     .where(and(eq(stackSecrets.stackId, stackId), eq(stackSecrets.key, key)))
     .returning({ id: stackSecrets.id })
 
-  if (!deleted.length) throw new NotFoundError('Secret no encontrado')
+  if (!deleted.length) throw new NotFoundError('Secret not found')
 }
 
 export async function listStackDomains(orgId: string, stackId: string) {
@@ -1276,7 +1276,7 @@ async function assertStackServiceRuntime(orgId: string, stackId: string, service
   const { stack, server } = await getStackAndServer(orgId, stackId)
   const services = await getStackAgentClient(server).listStackServices(server, stack.id, stack.projectName)
   const service = services.find(entry => entry.serviceName === serviceName)
-  if (!service) throw new NotFoundError('Servicio del stack no encontrado')
+  if (!service) throw new NotFoundError('Stack service not found')
   return { stack, server, service }
 }
 
@@ -1288,7 +1288,7 @@ async function assertStackServiceDefinition(orgId: string, stackId: string, serv
   if (!existsInCompose) {
     const runtimeServices = await getStackAgentClient(server).listStackServices(server, stack.id, stack.projectName)
     const existsInRuntime = runtimeServices.some(entry => entry.serviceName === serviceName)
-    if (!existsInRuntime) throw new NotFoundError('Servicio del stack no encontrado')
+    if (!existsInRuntime) throw new NotFoundError('Stack service not found')
   }
 
   return { stack, server }

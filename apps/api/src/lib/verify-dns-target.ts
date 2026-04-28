@@ -69,20 +69,20 @@ export function buildDnsTargetInstructions(hostname: string, target: string) {
   if (targetIpVersion === 4) {
     return [
       'Set an A record:',
-      `  ${hostname} → ${target}`,
+      `  ${hostname} -> ${target}`,
     ].join('\n')
   }
 
   if (targetIpVersion === 6) {
     return [
       'Set an AAAA record:',
-      `  ${hostname} → ${target}`,
+      `  ${hostname} -> ${target}`,
     ].join('\n')
   }
 
   return [
     `Set a CNAME record:`,
-    `  ${hostname} → ${target}`,
+    `  ${hostname} -> ${target}`,
     `If your DNS provider does not allow CNAME at the root domain, use ALIAS/ANAME pointing to the same target.`,
   ].join('\n')
 }

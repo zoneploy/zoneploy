@@ -81,7 +81,7 @@ export async function verifyAndSavePasskey(
   deviceName: string,
 ) {
   const challenge = await redis.get(REDIS_KEYS.webauthnChallenge(userId))
-  if (!challenge) throw new ValidationError('Challenge expirado, intentá de nuevo')
+  if (!challenge) throw new ValidationError('Challenge expired, try again')
 
   const rpId = getRpId()
   const origin = getRpOrigin()
@@ -100,7 +100,7 @@ export async function verifyAndSavePasskey(
   }
 
   if (!verification.verified || !verification.registrationInfo) {
-    throw new ValidationError('No se pudo verificar la llave')
+    throw new ValidationError('Could not verify the passkey')
   }
 
   const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo
@@ -118,7 +118,7 @@ export async function verifyAndSavePasskey(
       counter: credential.counter,
       deviceType: credentialDeviceType,
       backedUp: credentialBackedUp,
-      name: deviceName || 'Llave de acceso',
+      name: deviceName || 'Passkey',
     })
     .returning()
 
@@ -150,7 +150,7 @@ export async function deletePasskey(userId: string, passkeyId: string) {
     .where(and(eq(passkeys.id, passkeyId), eq(passkeys.userId, userId)))
     .limit(1)
 
-  if (!row) throw new NotFoundError('Passkey no encontrada')
+  if (!row) throw new NotFoundError('Passkey not found')
 
   await db.delete(passkeys).where(eq(passkeys.id, passkeyId))
   return { ok: true }
@@ -236,7 +236,7 @@ export async function verifyAuthentication(response: AuthenticationResponseJSON)
 
   const challengeKey = `rs:webauthn:auth:${challenge}`
   const savedChallenge = await redis.get(challengeKey)
-  if (!savedChallenge) throw new ValidationError('Challenge expirado, intentá de nuevo')
+  if (!savedChallenge) throw new ValidationError('Challenge expired, try again')
 
   const rpId = getRpId()
   const origin = getRpOrigin()
@@ -256,12 +256,12 @@ export async function verifyAuthentication(response: AuthenticationResponseJSON)
       },
     })
   } catch (err) {
-    throw new UnauthorizedError(`Autenticación fallida: ${(err as Error).message}`)
+    throw new UnauthorizedError(`Authentication failed: ${(err as Error).message}`)
   }
 
-  if (!verification.verified) throw new UnauthorizedError('Autenticación no verificada')
+  if (!verification.verified) throw new UnauthorizedError('Authentication was not verified')
 
-  // Limpiar challenge
+  // Clear challenge.
   await redis.del(challengeKey)
 
   // Update the signature counter.

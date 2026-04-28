@@ -87,7 +87,7 @@ export async function validateDeployToken(token: string): Promise<DeployResource
 
   if (stack) return { type: 'stack', ...stack }
 
-  throw new NotFoundError('Token invalido o revocado')
+  throw new NotFoundError('Invalid or revoked token')
 }
 
 export async function createDeployPlan(token: string, input: DeployPlanInput = {}): Promise<DeployPlan> {

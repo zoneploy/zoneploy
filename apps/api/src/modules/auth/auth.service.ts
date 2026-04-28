@@ -1,4 +1,4 @@
-﻿import bcrypt from 'bcryptjs'
+import bcrypt from 'bcryptjs'
 import { eq, and, ne, gte, desc } from 'drizzle-orm'
 import { nanoid } from 'nanoid'
 import { createHash, randomUUID } from 'node:crypto'
@@ -121,7 +121,7 @@ async function createUserAccount(input: RegisterInput) {
     .limit(1)
 
   if (existing) {
-    throw new ConflictError('El email ya estÃƒÂ¡ registrado')
+    throw new ConflictError('Email is already registered')
   }
 
   const passwordHash = await bcrypt.hash(input.password, 12)
@@ -135,14 +135,14 @@ async function createUserAccount(input: RegisterInput) {
     })
     .returning()
 
-  if (!user) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear usuario')
+  if (!user) throw new AppError(500, 'INTERNAL_ERROR', 'Could not create user')
 
   createNotification({
     userId: user.id,
     type: 'welcome',
     data: { name: user.fullName, lang: input.lang ?? 'es' },
     link: '/notifications',
-  }).catch(err => console.error('Error creando notificaciÃƒÂ³n de bienvenida:', err))
+  }).catch(err => console.error('Error creating welcome notification:', err))
 
   return user
 }
@@ -157,7 +157,7 @@ export async function getSetupStatus() {
 
 export async function setupOwner(input: RegisterInput, ctx?: SessionContext) {
   if (await ownerConfigured()) {
-    throw new ConflictError('La instancia ya tiene un owner configurado', 'OWNER_ALREADY_CONFIGURED')
+    throw new ConflictError('This instance already has an owner configured', 'OWNER_ALREADY_CONFIGURED')
   }
 
   const user = await createUserAccount(input)
@@ -179,7 +179,7 @@ export async function login(input: LoginInput, ctx?: SessionContext) {
   }
 
   if (user.status === 'suspended' || user.deletedAt) {
-    throw new UnauthorizedError('Cuenta suspendida')
+    throw new UnauthorizedError('Account is suspended')
   }
 
   // 2. Verify password.
@@ -253,14 +253,14 @@ export async function refresh(token: string) {
   try {
     payload = verifyRefreshToken(token)
   } catch {
-    throw new UnauthorizedError('Refresh token invÃ¡lido')
+    throw new UnauthorizedError('Invalid refresh token')
   }
 
   const tokenHash = hashToken(token)
   const stored = await findRefreshTokenByHash(tokenHash) ?? await findRefreshTokenByGrace(tokenHash)
 
   if (!stored || stored.userId !== payload.sub || stored.expiresAt < new Date()) {
-    throw new UnauthorizedError('Refresh token expirado o revocado')
+    throw new UnauthorizedError('Refresh token expired or revoked')
   }
 
   const [user] = await db
@@ -278,10 +278,10 @@ export async function refresh(token: string) {
     .limit(1)
 
   if (!user || user.status === 'suspended' || user.deletedAt) {
-    throw new UnauthorizedError('Cuenta no disponible')
+    throw new UnauthorizedError('Account is not available')
   }
 
-  // Rotar el token in-place: mantiene el mismo sessionId, actualiza hash, lastUsedAt y expiresAt (sliding)
+  // Rotate the token in place: keep the same sessionId and update hash, lastUsedAt, and expiresAt.
   const jti = nanoid()
   const newRefreshToken = signRefreshToken({ sub: user.id, jti })
   const newAccessToken = signAccessToken({ sub: user.id, email: user.email, name: user.fullName, sid: stored.id })
@@ -350,8 +350,8 @@ export async function loginByUserId(userId: string, ctx?: SessionContext) {
     .where(eq(users.id, userId))
     .limit(1)
 
-  if (!user) throw new NotFoundError('Usuario no encontrado')
-  if (user.status === 'suspended' || user.deletedAt) throw new UnauthorizedError('Cuenta suspendida')
+  if (!user) throw new NotFoundError('User not found')
+  if (user.status === 'suspended' || user.deletedAt) throw new UnauthorizedError('Account is suspended')
 
   const [membership] = await db
     .select({ orgId: orgMembers.orgId, role: orgMembers.role, customRoleId: orgMembers.customRoleId })
@@ -441,9 +441,9 @@ export async function completeMfaTotp(userId: string, code: string, ctx?: Sessio
     .where(eq(users.id, userId))
     .limit(1)
 
-  if (!user?.totpSecret) throw new UnauthorizedError('TOTP no configurado')
+  if (!user?.totpSecret) throw new UnauthorizedError('TOTP is not configured')
   const valid = verifySync({ token: code, secret: user.totpSecret, strategy: 'totp' })
-  if (!valid) throw new UnauthorizedError('CÃ³digo TOTP incorrecto')
+  if (!valid) throw new UnauthorizedError('Incorrect TOTP code')
 
   return await issueFinalTokens(userId, ctx)
 }
@@ -456,8 +456,8 @@ async function issueFinalTokens(userId: string, ctx?: SessionContext) {
     .where(eq(users.id, userId))
     .limit(1)
 
-  if (!user) throw new NotFoundError('Usuario no encontrado')
-  if (user.status === 'suspended' || user.deletedAt) throw new UnauthorizedError('Cuenta suspendida')
+  if (!user) throw new NotFoundError('User not found')
+  if (user.status === 'suspended' || user.deletedAt) throw new UnauthorizedError('Account is suspended')
 
   const [membership] = await db
     .select({ orgId: orgMembers.orgId, role: orgMembers.role, customRoleId: orgMembers.customRoleId })
@@ -506,6 +506,6 @@ export async function getMe(userId: string) {
     .where(eq(users.id, userId))
     .limit(1)
 
-  if (!user) throw new NotFoundError('Usuario no encontrado')
+  if (!user) throw new NotFoundError('User not found')
   return user
 }

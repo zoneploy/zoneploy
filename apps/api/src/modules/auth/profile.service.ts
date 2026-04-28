@@ -13,7 +13,7 @@ export async function updateProfile(userId: string, fullName: string) {
     .set({ fullName, updatedAt: new Date() })
     .where(eq(users.id, userId))
     .returning({ id: users.id, fullName: users.fullName, email: users.email })
-  if (!user) throw new NotFoundError('Usuario no encontrado')
+  if (!user) throw new NotFoundError('User not found')
   return user
 }
 
@@ -24,10 +24,10 @@ export async function changePassword(userId: string, currentPassword: string, ne
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
-  if (!user) throw new NotFoundError('Usuario no encontrado')
+  if (!user) throw new NotFoundError('User not found')
   const valid = await bcrypt.compare(currentPassword, user.passwordHash)
-  if (!valid) throw new UnauthorizedError('Contraseña actual incorrecta')
-  if (newPassword.length < 8) throw new ValidationError('La nueva contraseña debe tener al menos 8 caracteres')
+  if (!valid) throw new UnauthorizedError('Current password is incorrect')
+  if (newPassword.length < 8) throw new ValidationError('The new password must be at least 8 characters')
   const hash = await bcrypt.hash(newPassword, 10)
   await db.update(users).set({ passwordHash: hash, updatedAt: new Date() }).where(eq(users.id, userId))
   return { ok: true }
@@ -50,9 +50,9 @@ export async function verifyAndEnableTotp(userId: string, code: string) {
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
-  if (!user?.totpSecret) throw new ValidationError('Primero configurá el autenticador')
+  if (!user?.totpSecret) throw new ValidationError('Set up the authenticator first')
   const valid = verifySync({ token: code, secret: user.totpSecret, strategy: 'totp' })
-  if (!valid) throw new ValidationError('Código incorrecto')
+  if (!valid) throw new ValidationError('Incorrect code')
   await db.update(users).set({ totpEnabled: true, updatedAt: new Date() }).where(eq(users.id, userId))
   return { ok: true }
 }
@@ -64,9 +64,9 @@ export async function disableTotp(userId: string, code: string) {
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
-  if (!user?.totpEnabled) throw new ValidationError('El 2FA no está activo')
+  if (!user?.totpEnabled) throw new ValidationError('2FA is not active')
   const valid = verifySync({ token: code, secret: user.totpSecret!, strategy: 'totp' })
-  if (!valid) throw new ValidationError('Código incorrecto')
+  if (!valid) throw new ValidationError('Incorrect code')
   await db.update(users).set({ totpSecret: null, totpEnabled: false, updatedAt: new Date() }).where(eq(users.id, userId))
   return { ok: true }
 }

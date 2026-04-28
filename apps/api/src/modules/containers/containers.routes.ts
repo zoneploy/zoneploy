@@ -118,7 +118,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
     const { orgId } = req.params as { orgId: string }
     const input = CreateContainerSchema.safeParse(req.body)
     if (!input.success) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' } })
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' } })
     }
     try {
       const result = await deps.createContainer(orgId, input.data)
@@ -134,7 +134,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
     const { orgId, containerId } = req.params as { orgId: string; containerId: string }
     const input = UpdateContainerSchema.safeParse(req.body)
     if (!input.success) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' } })
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' } })
     }
     try {
       const result = await deps.updateContainer(orgId, containerId, input.data)
@@ -349,7 +349,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
     const { path = '/' } = req.query as { path?: string }
 
     if (!path.startsWith('/')) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Ruta inválida' } })
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Invalid path' } })
     }
 
     try {
@@ -373,7 +373,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
     const { orgId, containerId } = req.params as { orgId: string; containerId: string }
     try {
       const metrics = await deps.getCurrentMetrics(orgId, containerId)
-      return reply.send(metrics ?? { message: 'Sin métricas aún' })
+      return reply.send(metrics ?? { message: 'No metrics yet' })
     } catch (err) {
       if (err instanceof AppError) return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
       throw err
@@ -388,11 +388,11 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
     const { orgId, containerId } = req.params as { orgId: string; containerId: string }
     const { token } = req.query as { token?: string }
 
-    if (!token) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token requerido' } })
+    if (!token) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token is required' } })
     try {
       verifyAccessToken(token)
     } catch {
-      return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token inválido' } })
+      return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Invalid token' } })
     }
 
     const [container] = await db
@@ -412,7 +412,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
       .limit(1)
 
     if (!server || (server.status !== 'online' && server.agentMode !== 'self_hosted')) {
-      return reply.status(503).send({ error: { code: 'UNAVAILABLE', message: 'Servidor no disponible' } })
+      return reply.status(503).send({ error: { code: 'UNAVAILABLE', message: 'Server is not available' } })
     }
 
     const agentToken = getAgentAuthToken(server)
@@ -435,7 +435,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
 
       if (!agentRes.ok || !agentRes.body) {
         if (!reply.raw.writableEnded) {
-          reply.raw.write(`event: error\ndata: ${JSON.stringify({ message: 'No se pudo conectar al agente' })}\n\n`)
+          reply.raw.write(`event: error\ndata: ${JSON.stringify({ message: 'Could not connect to the agent' })}\n\n`)
         }
         reply.raw.end()
         return
@@ -493,7 +493,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
       .limit(1)
 
     if (!deployment || deployment.containerId !== containerId) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Deployment no encontrado' } })
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Deployment not found' } })
     }
 
     setSseCorsHeaders(req, reply)
@@ -557,7 +557,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
       })
 
       if (!agentRes.ok || !agentRes.body) {
-        return reply.status(502).send({ error: { code: 'AGENT_ERROR', message: 'No se pudo conectar al agente' } })
+        return reply.status(502).send({ error: { code: 'AGENT_ERROR', message: 'Could not connect to the agent' } })
       }
 
       setSseCorsHeaders(req, reply)

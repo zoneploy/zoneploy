@@ -186,7 +186,7 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
     const { orgId } = req.params as { orgId: string }
     const input = CreateStackSchema.safeParse(req.body)
     if (!input.success) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' } })
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' } })
     }
     try {
       const result = await deps.createStack(orgId, input.data)
@@ -201,7 +201,7 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
     const { orgId, stackId } = req.params as { orgId: string; stackId: string }
     const input = UpdateStackSchema.safeParse(req.body)
     if (!input.success) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' } })
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' } })
     }
     try {
       const result = await deps.updateStack(orgId, stackId, input.data)
@@ -241,7 +241,7 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
       : JSON.stringify(req.body)
 
     if (!composeContent?.trim()) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'El contenido del docker-compose.yml es requerido' } })
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'docker-compose.yml content is required' } })
     }
 
     try {
@@ -561,7 +561,7 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
     const { orgId, stackId, serviceName } = req.params as { orgId: string; stackId: string; serviceName: string }
     const { token } = req.query as { token?: string }
 
-    if (!token) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token requerido' } })
+    if (!token) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token is required' } })
     try {
       verifyAccessToken(token)
     } catch {
@@ -589,7 +589,7 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
 
       if (!agentRes.ok || !agentRes.body) {
         if (!reply.raw.writableEnded) {
-          reply.raw.write(`event: error\ndata: ${JSON.stringify({ message: 'No se pudo conectar al agente' })}\n\n`)
+          reply.raw.write(`event: error\ndata: ${JSON.stringify({ message: 'Could not connect to the agent' })}\n\n`)
         }
         reply.raw.end()
         return
@@ -669,7 +669,7 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
       })
 
       if (!agentRes.ok || !agentRes.body) {
-        return reply.status(502).send({ error: { code: 'AGENT_ERROR', message: 'No se pudo conectar al agente' } })
+        return reply.status(502).send({ error: { code: 'AGENT_ERROR', message: 'Could not connect to the agent' } })
       }
 
       setSseCorsHeaders(req, reply)
@@ -785,7 +785,7 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
     const { orgId, stackId, key } = req.params as { orgId: string; stackId: string; key: string }
     const input = UpsertSecretSchema.safeParse(req.body)
     if (!input.success) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' } })
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' } })
     }
     try {
       const stack = await deps.getStack(orgId, stackId)

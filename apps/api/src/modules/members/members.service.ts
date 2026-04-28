@@ -38,11 +38,11 @@ export async function createMember(
   data: CreateMemberInput,
 ) {
   if (data.role === 'custom' && !data.customRoleId) {
-    throw new ValidationError('customRoleId es requerido cuando el rol es custom')
+    throw new ValidationError('customRoleId is required when role is custom')
   }
 
   const requester = await getMember(orgId, requesterId)
-  if (!requester) throw new ForbiddenError('No sos miembro de esta organizacion')
+  if (!requester) throw new ForbiddenError('You are not a member of this organization')
   await assertCanManageMembers(requester)
 
   const customRole = data.role === 'custom'
@@ -63,7 +63,7 @@ export async function createMember(
 
     if (existing && !existing.deletedAt) {
       if (existing.status !== 'active') {
-        throw new ConflictError('El usuario existe pero no esta disponible')
+        throw new ConflictError('The user exists but is not available')
       }
 
       const [existingMember] = await tx
@@ -72,7 +72,7 @@ export async function createMember(
         .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, existing.id)))
         .limit(1)
 
-      if (existingMember) throw new ConflictError('El usuario ya es miembro de esta organizacion')
+      if (existingMember) throw new ConflictError('The user is already a member of this organization')
     }
 
     if (existing?.deletedAt) {
@@ -96,7 +96,7 @@ export async function createMember(
         .where(eq(users.id, existing.id))
         .returning()
 
-      if (!reactivated) throw new AppError(500, 'INTERNAL_ERROR', 'Error al reactivar usuario')
+      if (!reactivated) throw new AppError(500, 'INTERNAL_ERROR', 'Could not reactivate user')
       userRecord = reactivated
     } else if (existing) {
       userRecord = existing
@@ -110,7 +110,7 @@ export async function createMember(
         })
         .returning()
 
-      if (!created) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear usuario')
+      if (!created) throw new AppError(500, 'INTERNAL_ERROR', 'Could not create user')
       userRecord = created
     }
 
@@ -130,7 +130,7 @@ export async function createMember(
     type: 'welcome',
     data: { name: user.fullName },
     link: '/notifications',
-  }).catch(err => console.error('Error creando notificacion de bienvenida:', err))
+  }).catch(err => console.error('Error creating welcome notification:', err))
 
   return getMemberAuditProfile(orgId, user.id).then(member => ({
     id: member.memberId,
@@ -166,7 +166,7 @@ export async function getMemberAuditProfile(orgId: string, userId: string) {
     .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, userId), isNull(users.deletedAt)))
     .limit(1)
 
-  if (!member) throw new NotFoundError('Miembro no encontrado')
+  if (!member) throw new NotFoundError('Member not found')
 
   return {
     ...member,
@@ -182,7 +182,7 @@ export async function changeMemberRole(
   customRoleId?: string,
 ) {
   if (newRole === 'custom' && !customRoleId) {
-    throw new ValidationError('customRoleId es requerido cuando el rol es custom')
+    throw new ValidationError('customRoleId is required when role is custom')
   }
 
   const customRole = newRole === 'custom'
@@ -194,17 +194,17 @@ export async function changeMemberRole(
     getMember(orgId, targetUserId),
   ])
 
-  if (!requester) throw new ForbiddenError('No sos miembro de esta organización')
-  if (!target) throw new NotFoundError('Miembro no encontrado')
+  if (!requester) throw new ForbiddenError('You are not a member of this organization')
+  if (!target) throw new NotFoundError('Member not found')
   await assertCanManageMembers(requester)
 
   if (target.role === 'owner') {
-    throw new ForbiddenError('No podés cambiar el rol del Owner')
+    throw new ForbiddenError('You cannot change the Owner role')
   }
 
-  // Admin no puede modificar a otro admin
+  // An Admin cannot modify another admin.
   if (requester.role === 'admin' && target.role === 'admin') {
-    throw new ForbiddenError('Un Admin no puede modificar a otro Admin')
+    throw new ForbiddenError('An Admin cannot modify another Admin')
   }
 
   const [updated] = await db
@@ -221,7 +221,7 @@ export async function changeMemberRole(
 
 export async function removeMember(orgId: string, requesterId: string, targetUserId: string) {
   if (requesterId === targetUserId) {
-    throw new ForbiddenError('No podes eliminar tu propia cuenta')
+    throw new ForbiddenError('You cannot delete your own account')
   }
 
   const [requester, target] = await Promise.all([
@@ -229,17 +229,17 @@ export async function removeMember(orgId: string, requesterId: string, targetUse
     getMember(orgId, targetUserId),
   ])
 
-  if (!requester) throw new ForbiddenError('No sos miembro de esta organización')
-  if (!target) throw new NotFoundError('Miembro no encontrado')
+  if (!requester) throw new ForbiddenError('You are not a member of this organization')
+  if (!target) throw new NotFoundError('Member not found')
 
   await assertCanManageMembers(requester)
 
   if (target.role === 'owner') {
-    throw new ForbiddenError('No se puede remover al Owner de la organización')
+    throw new ForbiddenError('The Owner cannot be removed from the organization')
   }
 
   if (requester.role === 'admin' && target.role === 'admin') {
-    throw new ForbiddenError('Un Admin no puede remover a otro Admin')
+    throw new ForbiddenError('An Admin cannot remove another Admin')
   }
 
   let softDeleted = false
@@ -276,7 +276,7 @@ export async function removeMember(orgId: string, requesterId: string, targetUse
 
 export async function transferOwnership(orgId: string, currentOwnerId: string, newOwnerId: string) {
   if (currentOwnerId === newOwnerId) {
-    throw new ValidationError('Ya sos el Owner')
+    throw new ValidationError('You are already the Owner')
   }
 
   const [owner] = await db
@@ -287,7 +287,7 @@ export async function transferOwnership(orgId: string, currentOwnerId: string, n
     )
     .limit(1)
 
-  if (!owner) throw new ForbiddenError('Solo el Owner puede transferir el ownership')
+  if (!owner) throw new ForbiddenError('Only the Owner can transfer ownership')
 
   const [newOwnerMember] = await db
     .select()
@@ -297,7 +297,7 @@ export async function transferOwnership(orgId: string, currentOwnerId: string, n
     )
     .limit(1)
 
-  if (!newOwnerMember) throw new NotFoundError('El nuevo Owner debe ser miembro de la organización')
+  if (!newOwnerMember) throw new NotFoundError('The new Owner must be a member of the organization')
 
   await db.transaction(async tx => {
     await tx
@@ -344,7 +344,7 @@ async function getAssignableCustomRole(orgId: string, customRoleId: string) {
     .where(and(eq(customRoles.id, customRoleId), eq(customRoles.orgId, orgId)))
     .limit(1)
 
-  if (!role) throw new NotFoundError('Rol personalizado no encontrado')
+  if (!role) throw new NotFoundError('Custom role not found')
   return role
 }
 

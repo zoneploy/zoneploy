@@ -54,7 +54,7 @@ export async function getCustomRole(orgId: string, roleId: string) {
     .where(and(eq(customRoles.id, roleId), eq(customRoles.orgId, orgId)))
     .limit(1)
 
-  if (!role) throw new NotFoundError('Rol no encontrado')
+  if (!role) throw new NotFoundError('Role not found')
 
   const perms = await db
     .select({ permission: rolePermissions.permission })
@@ -75,14 +75,14 @@ export async function createCustomRole(
     .where(and(eq(customRoles.orgId, orgId), eq(customRoles.name, data.name)))
     .limit(1)
 
-  if (existing) throw new ConflictError('Ya existe un rol con ese nombre en esta organización')
+  if (existing) throw new ConflictError('A role with that name already exists in this organization')
 
   const [role] = await db
     .insert(customRoles)
     .values({ orgId, name: data.name, description: data.description ?? null })
     .returning()
 
-  if (!role) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear el rol')
+  if (!role) throw new AppError(500, 'INTERNAL_ERROR', 'Could not create the role')
 
   // Insert deduplicated permissions.
   const uniquePerms = [...new Set(data.permissions)]
@@ -107,7 +107,7 @@ export async function updateCustomRole(
     .where(and(eq(customRoles.id, roleId), eq(customRoles.orgId, orgId)))
     .limit(1)
 
-  if (!existing) throw new NotFoundError('Rol no encontrado')
+  if (!existing) throw new NotFoundError('Role not found')
 
   // Verify name uniqueness if it changes.
   if (data.name && data.name !== existing.name) {
@@ -117,7 +117,7 @@ export async function updateCustomRole(
       .where(and(eq(customRoles.orgId, orgId), eq(customRoles.name, data.name)))
       .limit(1)
 
-    if (dup) throw new ConflictError('Ya existe un rol con ese nombre en esta organización')
+    if (dup) throw new ConflictError('A role with that name already exists in this organization')
   }
 
   const [updated] = await db
@@ -130,7 +130,7 @@ export async function updateCustomRole(
     .where(eq(customRoles.id, roleId))
     .returning()
 
-  if (!updated) throw new NotFoundError('Rol no encontrado')
+  if (!updated) throw new NotFoundError('Role not found')
 
   // Replace permissions if provided.
   let finalPerms: Permission[]
@@ -163,7 +163,7 @@ export async function deleteCustomRole(orgId: string, roleId: string) {
     .limit(1)
 
   if (memberWithRole) {
-    throw new ForbiddenError('No podés eliminar un rol que está asignado a miembros activos')
+    throw new ForbiddenError('You cannot delete a role assigned to active members')
   }
 
   const result = await db
@@ -171,5 +171,5 @@ export async function deleteCustomRole(orgId: string, roleId: string) {
     .where(and(eq(customRoles.id, roleId), eq(customRoles.orgId, orgId)))
     .returning({ id: customRoles.id })
 
-  if (!result.length) throw new NotFoundError('Rol no encontrado')
+  if (!result.length) throw new NotFoundError('Role not found')
 }

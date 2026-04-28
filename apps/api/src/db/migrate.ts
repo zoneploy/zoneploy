@@ -19,7 +19,7 @@ export async function runMigrations() {
 
 // Direct execution: tsx src/db/migrate.ts  |  node dist/db/migrate.js
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  console.log('▶ Ejecutando migraciones...')
+  console.log('Running migrations...')
   await runMigrations()
-  console.log('✔ Migraciones completadas')
+  console.log('Migrations completed')
 }

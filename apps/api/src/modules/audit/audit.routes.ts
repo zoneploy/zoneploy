@@ -15,7 +15,7 @@ export async function auditRoutes(app: FastifyInstance) {
     const query = AuditQuerySchema.safeParse(request.query)
     if (!query.success) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'Parámetros de query inválidos' },
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid query parameters' },
       })
     }
 

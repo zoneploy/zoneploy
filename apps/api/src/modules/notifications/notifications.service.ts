@@ -56,7 +56,7 @@ export async function markAsRead(userId: string, notificationId: string) {
     .where(and(eq(notifications.id, notificationId), eq(notifications.userId, userId)))
     .returning()
 
-  if (!updated) throw new NotFoundError('Notificación no encontrada')
+  if (!updated) throw new NotFoundError('Notification not found')
   return updated
 }
 
@@ -75,7 +75,7 @@ export async function deleteNotification(userId: string, notificationId: string)
     .where(and(eq(notifications.id, notificationId), eq(notifications.userId, userId)))
     .returning()
 
-  if (!deleted) throw new NotFoundError('Notificación no encontrada')
+  if (!deleted) throw new NotFoundError('Notification not found')
   return { ok: true }
 }
 

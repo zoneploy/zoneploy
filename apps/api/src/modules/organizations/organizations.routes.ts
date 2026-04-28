@@ -30,7 +30,7 @@ export async function organizationRoutes(app: FastifyInstance) {
 
     if (!name || name.trim().length < 2) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'El nombre debe tener al menos 2 caracteres' },
+        error: { code: 'VALIDATION_ERROR', message: 'Name must be at least 2 characters' },
       })
     }
 
@@ -92,7 +92,7 @@ export async function organizationRoutes(app: FastifyInstance) {
       const input = UpdateOrgSchema.safeParse(request.body)
       if (!input.success) {
         return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' },
+          error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' },
         })
       }
       try {
@@ -145,13 +145,13 @@ export async function organizationRoutes(app: FastifyInstance) {
 
       const data = await request.file({ limits: { fileSize: LOGO_MAX_BYTES } })
       if (!data) {
-        return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'No se recibió ningún archivo' } })
+        return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'No file was received' } })
       }
 
       const submittedFilename = data.filename.toLowerCase()
       if (data.mimetype !== 'image/png' && !submittedFilename.endsWith('.png')) {
         return reply.status(400).send({
-          error: { code: 'INVALID_FILE_TYPE', message: 'Solo se aceptan archivos PNG' },
+          error: { code: 'INVALID_FILE_TYPE', message: 'Only PNG files are accepted' },
         })
       }
 
@@ -160,13 +160,13 @@ export async function organizationRoutes(app: FastifyInstance) {
 
         if (buffer.byteLength > LOGO_MAX_BYTES) {
           return reply.status(400).send({
-            error: { code: 'FILE_TOO_LARGE', message: 'El archivo no puede superar los 512 KB' },
+            error: { code: 'FILE_TOO_LARGE', message: 'The file cannot exceed 512 KB' },
           })
         }
 
         if (!isPng(buffer)) {
           return reply.status(400).send({
-            error: { code: 'INVALID_FILE_TYPE', message: 'Solo se aceptan archivos PNG' },
+            error: { code: 'INVALID_FILE_TYPE', message: 'Only PNG files are accepted' },
           })
         }
 
@@ -178,13 +178,13 @@ export async function organizationRoutes(app: FastifyInstance) {
             .toBuffer()
         } catch {
           return reply.status(400).send({
-            error: { code: 'INVALID_FILE_TYPE', message: 'Solo se aceptan archivos PNG' },
+            error: { code: 'INVALID_FILE_TYPE', message: 'Only PNG files are accepted' },
           })
         }
 
         if (normalized.byteLength > LOGO_MAX_BYTES) {
           return reply.status(400).send({
-            error: { code: 'FILE_TOO_LARGE', message: 'El archivo optimizado no puede superar los 512 KB' },
+            error: { code: 'FILE_TOO_LARGE', message: 'The optimized file cannot exceed 512 KB' },
           })
         }
 

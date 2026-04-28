@@ -43,7 +43,7 @@ export async function internalRoutes(app: FastifyInstance) {
     const authHeader = request.headers.authorization
 
     if (!authHeader?.startsWith('Bearer ')) {
-      return reply.status(401).send({ error: 'Token requerido' })
+      return reply.status(401).send({ error: 'Token is required' })
     }
 
     const receivedToken = authHeader.slice(7)
@@ -54,7 +54,7 @@ export async function internalRoutes(app: FastifyInstance) {
       .where(and(eq(servers.id, serverId), isNull(servers.deletedAt)))
       .limit(1)
 
-    if (!server) return reply.status(404).send({ error: 'Server no encontrado' })
+    if (!server) return reply.status(404).send({ error: 'Server not found' })
 
     const storedToken = decrypt({
       encrypted: server.agentTokenEncrypted,
@@ -63,7 +63,7 @@ export async function internalRoutes(app: FastifyInstance) {
     })
 
     if (receivedToken !== storedToken) {
-      return reply.status(401).send({ error: 'Token inválido' })
+      return reply.status(401).send({ error: 'Invalid token' })
     }
 
     const body = request.body as HeartbeatBody
@@ -225,17 +225,17 @@ export async function internalRoutes(app: FastifyInstance) {
 
   app.post('/servers/push-certs', async (request, reply) => {
     if (!config.INTERNAL_API_TOKEN) {
-      return reply.status(503).send({ error: 'INTERNAL_API_TOKEN no configurado' })
+      return reply.status(503).send({ error: 'INTERNAL_API_TOKEN is not configured' })
     }
 
     const token = request.headers['x-internal-token']
     if (token !== config.INTERNAL_API_TOKEN) {
-      return reply.status(401).send({ error: 'Token inválido' })
+      return reply.status(401).send({ error: 'Invalid token' })
     }
 
     const { cert, key } = request.body as { cert?: string; key?: string }
     if (!cert || !key) {
-      return reply.status(400).send({ error: 'cert y key son requeridos' })
+      return reply.status(400).send({ error: 'cert and key are required' })
     }
 
     const onlineServers = await db

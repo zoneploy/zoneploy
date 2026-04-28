@@ -1,4 +1,4 @@
-﻿import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
+import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
 import type { AuthResponseMfaRequired, AuthSessionResponse } from '@zoneploy/types'
 import { RegisterSchema, LoginSchema } from '@zoneploy/types'
 import { setupOwner, getSetupStatus, login, loginByUserId, refresh, logout, getMe, completeMfaWebauthn, completeMfaTotp, listSessions, revokeSession, revokeOtherSessions } from './auth.service.js'
@@ -77,7 +77,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
     const input = RegisterSchema.safeParse(request.body)
     if (!input.success) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos invÃƒÂ¡lidos' },
+        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' },
       })
     }
 
@@ -97,7 +97,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
     const input = LoginSchema.safeParse(request.body)
     if (!input.success) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'Email o contraseÃ±a invÃ¡lidos' },
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid email or password' },
       })
     }
 
@@ -119,7 +119,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
 
     if (!refreshToken) {
       return reply.status(401).send({
-        error: { code: 'UNAUTHORIZED', message: 'Refresh token requerido' },
+        error: { code: 'UNAUTHORIZED', message: 'Refresh token is required' },
       })
     }
 
@@ -193,7 +193,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // PATCH /auth/profile
   app.patch('/profile', { preHandler: [authenticate] }, async (request, reply) => {
     const { fullName } = request.body as { fullName?: string }
-    if (!fullName?.trim()) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Nombre requerido' } })
+    if (!fullName?.trim()) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Name is required' } })
     try {
       const user = await deps.updateProfile(request.userId, fullName.trim())
       return reply.send(user)
@@ -206,7 +206,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // POST /auth/profile/change-password
   app.post('/profile/change-password', { preHandler: [authenticate] }, async (request, reply) => {
     const { currentPassword, newPassword } = request.body as { currentPassword?: string; newPassword?: string }
-    if (!currentPassword || !newPassword) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Campos requeridos' } })
+    if (!currentPassword || !newPassword) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Required fields are missing' } })
     try {
       const result = await deps.changePassword(request.userId, currentPassword, newPassword)
       return reply.send(result)
@@ -230,7 +230,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // POST /auth/profile/2fa/totp/verify
   app.post('/profile/2fa/totp/verify', { preHandler: [authenticate] }, async (request, reply) => {
     const { code } = request.body as { code?: string }
-    if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'CÃ³digo requerido' } })
+    if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Code is required' } })
     try {
       const result = await deps.verifyAndEnableTotp(request.userId, code)
       return reply.send(result)
@@ -243,7 +243,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // POST /auth/profile/2fa/totp/disable
   app.post('/profile/2fa/totp/disable', { preHandler: [authenticate] }, async (request, reply) => {
     const { code } = request.body as { code?: string }
-    if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'CÃ³digo requerido' } })
+    if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Code is required' } })
     try {
       const result = await deps.disableTotp(request.userId, code)
       return reply.send(result)
@@ -293,7 +293,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // POST /auth/webauthn/register/verify: verify and save passkey.
   app.post('/webauthn/register/verify', { preHandler: [authenticate] }, async (request, reply) => {
     const { response, deviceName } = request.body as { response?: unknown; deviceName?: string }
-    if (!response) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'response requerido' } })
+    if (!response) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'response is required' } })
     try {
       const result = await deps.verifyAndSavePasskey(request.userId, response as any, deviceName ?? '')
       return reply.send(result)
@@ -318,7 +318,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // POST /auth/webauthn/auth/verify: verify and authenticate with passkey (direct login).
   app.post('/webauthn/auth/verify', async (request, reply) => {
     const { response } = request.body as { response?: unknown }
-    if (!response) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'response requerido' } })
+    if (!response) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'response is required' } })
     try {
       const { userId } = await deps.verifyAuthentication(response as any)
       const tokens = await deps.loginByUserId(userId, getClientCtx(request))
@@ -346,7 +346,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // POST /auth/mfa/webauthn/verify: complete login with WebAuthn after email/password.
   app.post('/mfa/webauthn/verify', { preHandler: [authenticate] }, async (request, reply) => {
     const { response } = request.body as { response?: unknown }
-    if (!response) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'response requerido' } })
+    if (!response) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'response is required' } })
     try {
       const result = await deps.completeMfaWebauthn(request.userId, response, getClientCtx(request))
       return replyWithAuthSession(request, reply, result)
@@ -359,7 +359,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // POST /auth/mfa/totp/verify: complete login with TOTP after email/password.
   app.post('/mfa/totp/verify', { preHandler: [authenticate] }, async (request, reply) => {
     const { code } = request.body as { code?: string }
-    if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'code requerido' } })
+    if (!code) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'code is required' } })
     try {
       const result = await deps.completeMfaTotp(request.userId, code, getClientCtx(request))
       return replyWithAuthSession(request, reply, result)
@@ -398,7 +398,7 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions =
   // DELETE /auth/sessions: revoke all sessions except the current one.
   app.delete('/sessions', { preHandler: [authenticate] }, async (request, reply) => {
     if (!request.sessionId) {
-      return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'SesiÃ³n actual no identificada' } })
+      return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'Current session could not be identified' } })
     }
     try {
       const result = await deps.revokeOtherSessions(request.userId, request.sessionId)

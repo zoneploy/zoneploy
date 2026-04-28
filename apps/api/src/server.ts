@@ -125,7 +125,7 @@ server.setErrorHandler((err: Error, _request, reply) => {
   }
 
   server.log.error(err)
-  return reply.status(500).send({ error: { code: 'INTERNAL_ERROR', message: 'Error interno del servidor' } })
+  return reply.status(500).send({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } })
 })
 
 // Health check
@@ -188,7 +188,7 @@ await server.register(notificationRoutes, { prefix: '/api/v1/notifications' })
 server.post('/api/v1/deploy/plan', async (request, reply) => {
   const auth = request.headers.authorization
   const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-  if (!token) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token requerido' } })
+  if (!token) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token is required' } })
 
   const body = (request.body ?? {}) as {
     target?: 'auto' | 'container' | 'stack'
@@ -213,7 +213,7 @@ server.post('/api/v1/deploy/plan', async (request, reply) => {
 server.post('/api/v1/deploy', async (request, reply) => {
   const auth = request.headers.authorization
   const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-  if (!token) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token requerido' } })
+  if (!token) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token is required' } })
 
   const body = (request.body ?? {}) as {
     image?: string
@@ -282,7 +282,7 @@ server.post('/api/v1/stacks/deploy', {
 }, async (request, reply) => {
   const auth = request.headers.authorization
   const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-  if (!token) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token requerido' } })
+  if (!token) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token is required' } })
 
   let composeContent: string | undefined
   const contentType = request.headers['content-type'] ?? ''
@@ -293,7 +293,7 @@ server.post('/api/v1/stacks/deploy', {
   }
 
   if (!composeContent?.trim()) {
-    return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'El contenido del docker-compose.yml es requerido' } })
+    return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'docker-compose.yml content is required' } })
   }
 
   try {
@@ -310,32 +310,32 @@ server.post('/api/v1/stacks/deploy', {
 async function start() {
   try {
     await db.execute(sql`SELECT 1`)
-    server.log.info('✔ PostgreSQL conectado')
+    server.log.info('PostgreSQL connected')
 
     await runMigrations()
-    server.log.info('✔ Migraciones aplicadas')
+    server.log.info('Migrations applied')
 
     await runSeed()
-    server.log.info('✔ Seed verificado')
+    server.log.info('Seed verified')
 
     await redis.connect()
-    server.log.info('✔ Redis conectado')
+    server.log.info('Redis connected')
 
     await server.listen({ port: config.PORT, host: '0.0.0.0' })
-    server.log.info(`▶ Platform corriendo en puerto ${config.PORT}`)
+    server.log.info(`Platform running on port ${config.PORT}`)
 
-    server.log.info('▶ Offline detector iniciado')
+    server.log.info('Offline detector started')
 
-    server.log.info('▶ Operation recovery watchdog iniciado')
+    server.log.info('Operation recovery watchdog started')
 
-    server.log.info('▶ Custom domain TLS reconciler iniciado')
+    server.log.info('Custom domain TLS reconciler started')
 
-    server.log.info('▶ Stack backup scheduler iniciado')
+    server.log.info('Stack backup scheduler started')
 
     const SIX_HOURS = 6 * 60 * 60 * 1000
 
-    cleanupAllDeploymentHistory(20).catch(err => server.log.warn(err, 'Error en cleanup de deployments'))
-    setInterval(() => cleanupAllDeploymentHistory(20).catch(err => server.log.warn(err, 'Error en cleanup de deployments')), SIX_HOURS)
+    cleanupAllDeploymentHistory(20).catch(err => server.log.warn(err, 'Deployment cleanup failed'))
+    setInterval(() => cleanupAllDeploymentHistory(20).catch(err => server.log.warn(err, 'Deployment cleanup failed')), SIX_HOURS)
   } catch (err) {
     server.log.error(err)
     process.exit(1)

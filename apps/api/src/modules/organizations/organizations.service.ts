@@ -59,7 +59,7 @@ export async function createOrg(userId: string, name: string) {
     .values({ name, slug, ownerId: userId })
     .returning()
 
-  if (!org) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear la organización')
+  if (!org) throw new AppError(500, 'INTERNAL_ERROR', 'Could not create the organization')
 
   // Owner membership.
   await db.insert(orgMembers).values({
@@ -102,7 +102,7 @@ export async function createOrg(userId: string, name: string) {
     type: 'org_created',
     data: { orgName: org.name },
     link: '/settings',
-  }).catch(err => console.error('Error creando notificación org_created:', err))
+  }).catch(err => console.error('Error creating org_created notification:', err))
 
   const permissions = await resolvePermissions('owner', null)
 
@@ -124,7 +124,7 @@ export async function getOrg(orgId: string, userId: string) {
     .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, userId)))
     .limit(1)
 
-  if (!member) throw new ForbiddenError('No sos miembro de esta organización')
+  if (!member) throw new ForbiddenError('You are not a member of this organization')
 
   const [org] = await db
     .select()
@@ -132,7 +132,7 @@ export async function getOrg(orgId: string, userId: string) {
     .where(and(eq(organizations.id, orgId), eq(organizations.status, 'active'), isNull(organizations.deletedAt)))
     .limit(1)
 
-  if (!org) throw new NotFoundError('Organización no encontrada')
+  if (!org) throw new NotFoundError('Organization not found')
 
   const permissions = await resolvePermissions(member.role as OrgRole, member.customRoleId)
 
@@ -158,7 +158,7 @@ export async function updateOrg(
     .where(and(eq(organizations.id, orgId), eq(organizations.status, 'active'), isNull(organizations.deletedAt)))
     .returning()
 
-  if (!org) throw new NotFoundError('Organización no encontrada')
+  if (!org) throw new NotFoundError('Organization not found')
 
   return formatOrg(org)
 }
@@ -170,7 +170,7 @@ export async function updateOrgLogo(orgId: string, logoUrl: string, logoKey: str
     .where(and(eq(organizations.id, orgId), eq(organizations.status, 'active'), isNull(organizations.deletedAt)))
     .returning()
 
-  if (!org) throw new NotFoundError('Organización no encontrada')
+  if (!org) throw new NotFoundError('Organization not found')
 
   return { logoUrl: org.logoUrl }
 }
@@ -225,8 +225,8 @@ export async function deleteOrg(orgId: string, userId: string) {
     .where(eq(organizations.id, orgId))
     .limit(1)
 
-  if (!org) throw new NotFoundError('Organización no encontrada')
-  if (org.ownerId !== userId) throw new ForbiddenError('Solo el owner puede eliminar la organización')
+  if (!org) throw new NotFoundError('Organization not found')
+  if (org.ownerId !== userId) throw new ForbiddenError('Only the owner can delete the organization')
 
   const [zoneployEndpoints, customEndpoints] = await Promise.all([
     db

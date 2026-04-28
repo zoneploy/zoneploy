@@ -30,7 +30,7 @@ export async function memberRoutes(app: FastifyInstance) {
 
     const input = CreateMemberSchema.safeParse(request.body)
     if (!input.success) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos invalidos' } })
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' } })
     }
 
     try {
@@ -66,7 +66,7 @@ export async function memberRoutes(app: FastifyInstance) {
 
     const input = ChangeRoleSchema.safeParse(request.body)
     if (!input.success) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Rol inválido' } })
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Invalid role' } })
     }
     try {
       const targetMember = await getMemberAuditProfile(orgId, targetUserId)
@@ -131,7 +131,7 @@ export async function memberRoutes(app: FastifyInstance) {
 
     const input = TransferOwnershipSchema.safeParse(request.body)
     if (!input.success) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'newOwnerId inválido' } })
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Invalid newOwnerId' } })
     }
 
     try {

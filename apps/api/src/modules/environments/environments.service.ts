@@ -71,7 +71,7 @@ export async function getEnvironment(orgId: string, projectId: string, envId: st
     )
     .limit(1)
 
-  if (!row) throw new NotFoundError('Environment no encontrado')
+  if (!row) throw new NotFoundError('Environment not found')
 
   return formatEnv(row.env)
 }
@@ -95,7 +95,7 @@ export async function createEnvironment(
     )
     .limit(1)
 
-  if (existing) throw new ConflictError('Ya existe un environment con ese nombre en este proyecto')
+  if (existing) throw new ConflictError('An environment with that name already exists in this project')
 
   const [env] = await db
     .insert(environments)
@@ -109,7 +109,7 @@ export async function createEnvironment(
     })
     .returning()
 
-  if (!env) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear el environment')
+  if (!env) throw new AppError(500, 'INTERNAL_ERROR', 'Could not create the environment')
 
   return formatEnv(env)
 }
@@ -142,7 +142,7 @@ export async function updateEnvironment(
     )
     .returning()
 
-  if (!env) throw new NotFoundError('Environment no encontrado')
+  if (!env) throw new NotFoundError('Environment not found')
 
   return formatEnv(env)
 }
@@ -212,7 +212,7 @@ export async function deleteEnvironment(orgId: string, projectId: string, envId:
     )
     .returning({ id: environments.id })
 
-  if (!env) throw new NotFoundError('Environment no encontrado')
+  if (!env) throw new NotFoundError('Environment not found')
 
   if (routeHosts.length > 0) {
     await redis.hdel(REDIS_KEYS.routesHash, ...routeHosts).catch(() => null)
@@ -274,7 +274,7 @@ export async function deleteEnvSecret(orgId: string, envId: string, key: string)
     .where(and(eq(envSecrets.environmentId, envId), eq(envSecrets.orgId, orgId), eq(envSecrets.key, key)))
     .returning({ id: envSecrets.id })
 
-  if (!result.length) throw new NotFoundError('Secret no encontrado')
+  if (!result.length) throw new NotFoundError('Secret not found')
 }
 
 /**

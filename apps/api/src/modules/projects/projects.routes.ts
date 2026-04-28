@@ -35,7 +35,7 @@ export async function projectRoutes(app: FastifyInstance) {
     const input = CreateProjectSchema.safeParse(request.body)
     if (!input.success) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' },
+        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' },
       })
     }
 
@@ -68,7 +68,7 @@ export async function projectRoutes(app: FastifyInstance) {
     const input = UpdateProjectSchema.safeParse(request.body)
     if (!input.success) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' },
+        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' },
       })
     }
 

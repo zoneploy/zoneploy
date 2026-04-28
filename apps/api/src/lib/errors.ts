@@ -10,7 +10,7 @@ export class AppError extends Error {
 }
 
 export class NotFoundError extends AppError {
-  constructor(message = 'Recurso no encontrado', code = 'NOT_FOUND') {
+  constructor(message = 'Resource not found', code = 'NOT_FOUND') {
     super(404, code, message)
   }
 }
@@ -29,7 +29,7 @@ export class UnauthorizedError extends AppError {
 
 export class InvalidCredentialsError extends AppError {
   constructor() {
-    super(401, 'INVALID_CREDENTIALS', 'Email o contraseña incorrectos')
+    super(401, 'INVALID_CREDENTIALS', 'Incorrect email or password')
   }
 }
 

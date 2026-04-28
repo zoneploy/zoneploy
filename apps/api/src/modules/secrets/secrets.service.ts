@@ -20,12 +20,12 @@ async function assertContainerOwnership(orgId: string, containerId: string) {
     .where(and(eq(containers.id, containerId), eq(containers.orgId, orgId)))
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
+  if (!container) throw new NotFoundError('Container not found')
 }
 
 function validateKey(key: string) {
   if (!/^[A-Z0-9_]+$/.test(key)) {
-    throw new ValidationError('La clave solo puede contener letras mayúsculas, números y guiones bajos (ej: DATABASE_URL)')
+    throw new ValidationError('The key can only contain uppercase letters, numbers, and underscores (for example: DATABASE_URL)')
   }
 }
 
@@ -58,7 +58,7 @@ export async function upsertSecret(
 
   const encrypted = encrypt(value)
 
-  // Upsert: actualiza si existe, crea si no
+  // Upsert: update if it exists, create it otherwise.
   const existing = await db
     .select({ id: containerSecrets.id })
     .from(containerSecrets)
@@ -107,7 +107,7 @@ export async function deleteSecret(orgId: string, containerId: string, key: stri
     .where(and(eq(containerSecrets.containerId, containerId), eq(containerSecrets.key, key)))
     .returning({ id: containerSecrets.id })
 
-  if (!deleted) throw new NotFoundError(`Secret "${key}" no encontrado`)
+  if (!deleted) throw new NotFoundError(`Secret "${key}" not found`)
 
   await markNeedsRedeploy(containerId)
 }

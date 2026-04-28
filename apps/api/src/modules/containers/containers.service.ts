@@ -158,7 +158,7 @@ export async function getContainer(orgId: string, containerId: string) {
     )
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
+  if (!container) throw new NotFoundError('Container not found')
 
   return enrichContainer(container)
 }
@@ -187,7 +187,7 @@ export async function createContainer(orgId: string, input: CreateContainerInput
     })
     .returning()
 
-  if (!container) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear el Container')
+  if (!container) throw new AppError(500, 'INTERNAL_ERROR', 'Could not create the container')
 
   // Return the raw token; this is the only time it is exposed.
   return { ...formatContainer(container), deployToken }
@@ -210,7 +210,7 @@ export async function updateContainer(
     )
     .returning()
 
-  if (!container) throw new NotFoundError('Container no encontrado')
+  if (!container) throw new NotFoundError('Container not found')
   return formatContainer(container)
 }
 
@@ -227,7 +227,7 @@ export async function deleteContainer(orgId: string, containerId: string, userId
     )
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
+  if (!container) throw new NotFoundError('Container not found')
 
   // Try to stop the container on the server if it is running.
   await deleteContainerWithDeps(container, {
@@ -303,9 +303,9 @@ export async function deployContainer(
     )
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
-  if (container.status === 'deploying') throw new ValidationError('El Container ya está siendo desplegado')
-  if (!container.image && !options?.git) throw new ValidationError('El container está esperando su primer deploy. Configurá el CI/CD y hacé un push para arrancar.')
+  if (!container) throw new NotFoundError('Container not found')
+  if (container.status === 'deploying') throw new ValidationError('The container is already being deployed')
+  if (!container.image && !options?.git) throw new ValidationError('The container is waiting for its first deploy. Configure CI/CD and push to start it.')
 
   const [zoneployRows, customRows] = await Promise.all([
     listZoneployEndpoints('container', containerId),
@@ -316,15 +316,15 @@ export async function deployContainer(
   const registryPassword = options?.registry?.registryPassword
 
   // Load the server manually selected on the container.
-  if (!container.serverId) throw new ValidationError('El Container no tiene un Servidor asignado')
+  if (!container.serverId) throw new ValidationError('The container does not have a server assigned')
   const [server] = await db
     .select()
     .from(servers)
     .where(and(eq(servers.id, container.serverId), eq(servers.orgId, orgId)))
     .limit(1)
-  if (!server) throw new NotFoundError('Server no encontrado')
+  if (!server) throw new NotFoundError('Server not found')
   if (server.status !== 'online' && server.agentMode !== 'self_hosted') {
-    throw new AppError(409, 'SERVER_UNAVAILABLE', 'El Server no está en línea')
+    throw new AppError(409, 'SERVER_UNAVAILABLE', 'The server is not online')
   }
   const serverId = server.id
 
@@ -376,7 +376,7 @@ export async function deployContainer(
     })
     .returning()
 
-  if (!deployment) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear el Deployment')
+  if (!deployment) throw new AppError(500, 'INTERNAL_ERROR', 'Could not create the deployment')
 
   // Prune history: keep only the last 20 container deployments.
   pruneDeploymentHistory(containerId, 20).catch(() => null)
@@ -512,7 +512,7 @@ export async function listDeployments(orgId: string, containerId: string, page =
     .where(and(eq(containers.id, containerId), eq(containers.orgId, orgId)))
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
+  if (!container) throw new NotFoundError('Container not found')
 
   const offset = (page - 1) * limit
 
@@ -543,7 +543,7 @@ export async function getDeployment(orgId: string, deploymentId: string) {
     .where(and(eq(containerDeployments.id, deploymentId), eq(containerDeployments.orgId, orgId)))
     .limit(1)
 
-  if (!deployment) throw new NotFoundError('Deployment no encontrado')
+  if (!deployment) throw new NotFoundError('Deployment not found')
   return deployment
 }
 
@@ -554,8 +554,8 @@ export async function rollbackDeployment(orgId: string, containerId: string, dep
     .where(and(eq(containerDeployments.id, deploymentId), eq(containerDeployments.containerId, containerId)))
     .limit(1)
 
-  if (!prev) throw new NotFoundError('Deployment no encontrado')
-  if (prev.status !== 'success') throw new ValidationError('Solo se puede hacer rollback a un deployment exitoso')
+  if (!prev) throw new NotFoundError('Deployment not found')
+  if (prev.status !== 'success') throw new ValidationError('Only a successful deployment can be rolled back')
 
   // Update the container image with the previous deployment image and redeploy.
   await db
@@ -581,7 +581,7 @@ export async function getMetricsHistory(orgId: string, containerId: string, peri
     .where(and(eq(containers.id, containerId), eq(containers.orgId, orgId), isNull(containers.deletedAt)))
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
+  if (!container) throw new NotFoundError('Container not found')
 
   const periodMs = { '1h': 3_600_000, '6h': 21_600_000, '24h': 86_400_000 }[period]
   const since = Date.now() - periodMs
@@ -625,9 +625,9 @@ export async function getContainerForStreaming(orgId: string, containerId: strin
     )
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
-  if (!container.serverId) throw new ForbiddenError('El container no tiene Server asignado')
-  if (!container.dockerId) throw new ForbiddenError('El container no está en ejecución')
+  if (!container) throw new NotFoundError('Container not found')
+  if (!container.serverId) throw new ForbiddenError('The container does not have a server assigned')
+  if (!container.dockerId) throw new ForbiddenError('The container is not running')
 
   const [server] = await db
     .select()
@@ -635,9 +635,9 @@ export async function getContainerForStreaming(orgId: string, containerId: strin
     .where(eq(servers.id, container.serverId))
     .limit(1)
 
-  if (!server) throw new NotFoundError('Server no encontrado')
+  if (!server) throw new NotFoundError('Server not found')
   if (server.status !== 'online' && server.agentMode !== 'self_hosted') {
-    throw new ForbiddenError('El Server no está online')
+    throw new ForbiddenError('The server is not online')
   }
 
   return { container, server }
@@ -652,13 +652,13 @@ async function getRunningContainerAndServer(orgId: string, containerId: string) 
     .where(and(eq(containers.id, containerId), eq(containers.orgId, orgId), isNull(containers.deletedAt)))
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
-  if (!container.serverId || !container.dockerId) throw new ForbiddenError('El container no está desplegado')
+  if (!container) throw new NotFoundError('Container not found')
+  if (!container.serverId || !container.dockerId) throw new ForbiddenError('The container is not deployed')
 
   const [server] = await db.select().from(servers).where(eq(servers.id, container.serverId)).limit(1)
-  if (!server) throw new NotFoundError('Server no encontrado')
+  if (!server) throw new NotFoundError('Server not found')
   if (server.status !== 'online' && server.agentMode !== 'self_hosted') {
-    throw new ForbiddenError('El Server no está online')
+    throw new ForbiddenError('The server is not online')
   }
 
   return { container, server }
@@ -697,7 +697,7 @@ export async function regenerateDeployToken(orgId: string, containerId: string) 
     .where(and(eq(containers.id, containerId), eq(containers.orgId, orgId), isNull(containers.deletedAt)))
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
+  if (!container) throw new NotFoundError('Container not found')
 
   const token = generateDeployToken()
   const hash = hashDeployToken(token)
@@ -718,7 +718,7 @@ export async function revokeDeployToken(orgId: string, containerId: string) {
     .where(and(eq(containers.id, containerId), eq(containers.orgId, orgId), isNull(containers.deletedAt)))
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
+  if (!container) throw new NotFoundError('Container not found')
 
   await db
     .update(containers)
@@ -736,10 +736,10 @@ export async function deployByToken(token: string, opts: { image?: string; git?:
     .where(and(eq(containers.deployTokenHash, hash), isNull(containers.deletedAt)))
     .limit(1)
 
-  if (!container) throw new NotFoundError('Token inválido o revocado')
-  if (container.status === 'deploying') throw new ValidationError('El container ya está siendo desplegado')
+  if (!container) throw new NotFoundError('Invalid or revoked token')
+  if (container.status === 'deploying') throw new ValidationError('The container is already being deployed')
   if (container.status === 'waiting' && !opts.image && !opts.git) {
-    throw new ValidationError('Se requiere "image" o "git" en el primer deploy. Asegurate de que tu GitHub Action envíe el source.')
+    throw new ValidationError('The first deploy requires "image" or "git". Make sure your GitHub Action sends the source.')
   }
 
   // Update image if a new one is provided.

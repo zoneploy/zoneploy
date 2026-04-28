@@ -38,7 +38,7 @@ export async function environmentRoutes(app: FastifyInstance) {
     const input = CreateEnvironmentSchema.safeParse(request.body)
     if (!input.success) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' },
+        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' },
       })
     }
 
@@ -72,7 +72,7 @@ export async function environmentRoutes(app: FastifyInstance) {
     const input = UpdateEnvironmentSchema.safeParse(request.body)
     if (!input.success) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Datos inválidos' },
+        error: { code: 'VALIDATION_ERROR', message: input.error.errors[0]?.message ?? 'Invalid data' },
       })
     }
 
@@ -157,7 +157,7 @@ export async function environmentRoutes(app: FastifyInstance) {
     const input = UpsertSecretSchema.safeParse(request.body)
     if (!input.success) {
       return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'Valor inválido' },
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid value' },
       })
     }
 

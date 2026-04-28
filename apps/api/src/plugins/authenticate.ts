@@ -17,7 +17,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   const authHeader = request.headers.authorization
 
   if (!authHeader?.startsWith('Bearer ')) {
-    return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token requerido' } })
+    return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token is required' } })
   }
 
   const token = authHeader.slice(7)
@@ -31,7 +31,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       .limit(1)
 
     if (!user || user.status !== 'active' || user.deletedAt) {
-      return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Cuenta no disponible' } })
+      return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Account is not available' } })
     }
 
     request.userId = payload.sub
@@ -39,6 +39,6 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     request.userName = payload.name ?? ''
     request.sessionId = payload.sid ?? null
   } catch {
-    return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Token inválido o expirado' } })
+    return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' } })
   }
 }

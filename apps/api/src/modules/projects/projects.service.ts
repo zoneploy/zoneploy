@@ -66,7 +66,7 @@ export async function getProject(orgId: string, projectId: string) {
     .groupBy(projects.id)
     .limit(1)
 
-  if (!row) throw new NotFoundError('Proyecto no encontrado')
+  if (!row) throw new NotFoundError('Project not found')
 
   return formatProject(row.project, row.envCount)
 }
@@ -81,14 +81,14 @@ export async function createProject(orgId: string, data: { name: string; descrip
     .where(and(eq(projects.orgId, orgId), eq(projects.slug, slug), isNull(projects.deletedAt)))
     .limit(1)
 
-  if (existing) throw new ConflictError('Ya existe un proyecto con ese nombre en esta organización')
+  if (existing) throw new ConflictError('A project with that name already exists in this organization')
 
   const [project] = await db
     .insert(projects)
     .values({ orgId, name: data.name, slug, description: data.description ?? null })
     .returning()
 
-  if (!project) throw new AppError(500, 'INTERNAL_ERROR', 'Error al crear el proyecto')
+  if (!project) throw new AppError(500, 'INTERNAL_ERROR', 'Could not create the project')
 
   return formatProject(project)
 }
@@ -112,7 +112,7 @@ export async function updateProject(
     .where(and(eq(projects.id, projectId), eq(projects.orgId, orgId), isNull(projects.deletedAt)))
     .returning()
 
-  if (!project) throw new NotFoundError('Proyecto no encontrado')
+  if (!project) throw new NotFoundError('Project not found')
 
   return formatProject(project)
 }
@@ -186,7 +186,7 @@ export async function deleteProject(orgId: string, projectId: string) {
     .where(and(eq(projects.id, projectId), eq(projects.orgId, orgId), isNull(projects.deletedAt)))
     .returning({ id: projects.id })
 
-  if (!project) throw new NotFoundError('Proyecto no encontrado')
+  if (!project) throw new NotFoundError('Project not found')
 
   if (routeHosts.length > 0) {
     await redis.hdel(REDIS_KEYS.routesHash, ...routeHosts).catch(() => null)

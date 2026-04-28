@@ -4,15 +4,15 @@ import { CUSTOM_ROLE_PERMISSIONS } from './enums.js'
 // Auth
 
 export const RegisterSchema = z.object({
-  email: z.string().email('Email invÃ¡lido'),
-  password: z.string().min(8, 'MÃ­nimo 8 caracteres').max(100),
-  fullName: z.string().min(2, 'MÃ­nimo 2 caracteres').max(100),
+  email: z.string().email('Invalid email'),
+  password: z.string().min(8, 'Minimum 8 characters').max(100),
+  fullName: z.string().min(2, 'Minimum 2 characters').max(100),
   lang: z.enum(['es', 'en']).default('es'),
 })
 
 export const LoginSchema = z.object({
-  email: z.string().email('Email invÃ¡lido'),
-  password: z.string().min(1, 'IngresÃ¡ tu contraseÃ±a'),
+  email: z.string().email('Invalid email'),
+  password: z.string().min(1, 'Enter your password'),
 })
 
 // Organization
@@ -75,14 +75,14 @@ export const UpdateCustomRoleSchema = z.object({
 const OrgRoleSchema = z.enum(['admin', 'member', 'viewer', 'custom'])
 
 export const CreateMemberSchema = z.object({
-  fullName: z.string().min(2, 'Minimo 2 caracteres').max(100),
+  fullName: z.string().min(2, 'Minimum 2 characters').max(100),
   email: z.string().email(),
-  password: z.string().min(8, 'Minimo 8 caracteres').max(100),
+  password: z.string().min(8, 'Minimum 8 characters').max(100),
   role: OrgRoleSchema,
   customRoleId: z.string().uuid().optional(),
 }).refine(
   data => data.role !== 'custom' || !!data.customRoleId,
-  { message: 'customRoleId es requerido cuando el rol es custom', path: ['customRoleId'] },
+  { message: 'customRoleId is required when role is custom', path: ['customRoleId'] },
 )
 
 export const UpdateMemberRoleSchema = z.object({
@@ -90,7 +90,7 @@ export const UpdateMemberRoleSchema = z.object({
   customRoleId: z.string().uuid().optional(),
 }).refine(
   data => data.role !== 'custom' || !!data.customRoleId,
-  { message: 'customRoleId es requerido cuando el rol es custom', path: ['customRoleId'] },
+  { message: 'customRoleId is required when role is custom', path: ['customRoleId'] },
 )
 
 // Container

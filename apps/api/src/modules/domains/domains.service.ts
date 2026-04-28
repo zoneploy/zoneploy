@@ -114,7 +114,7 @@ async function getContainerRow(orgId: string, containerId: string) {
     .where(and(eq(containers.id, containerId), eq(containers.orgId, orgId), isNull(containers.deletedAt)))
     .limit(1)
 
-  if (!container) throw new NotFoundError('Container no encontrado')
+  if (!container) throw new NotFoundError('Container not found')
   return container
 }
 
