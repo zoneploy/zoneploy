@@ -12,7 +12,6 @@ export type LocalDeployRequest = {
 export type ContainerPortMapping = {
   port: number;
   isPrimary: boolean;
-  zoneploySubdomains: string[];
   customDomains: string[];
 };
 

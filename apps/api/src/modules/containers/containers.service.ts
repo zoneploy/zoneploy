@@ -10,7 +10,6 @@ import {
   customPublicEndpoints,
   environments,
   projects,
-  zoneployPublicEndpoints,
 } from '../../db/schema.js'
 import { NotFoundError, ForbiddenError, ValidationError, AppError } from '../../lib/errors.js'
 import { generateSlug } from '../../lib/slug.js'
@@ -24,10 +23,7 @@ import type { CreateContainerInput, UpdateContainerInput } from '@zoneploy/types
 import type { GitBuildSource } from '../../lib/worker-client.js'
 import {
   getPreferredPublicHost,
-  getZoneployFullDomain,
   listCustomEndpoints,
-  listZoneployEndpoints,
-  promoteNextPrimaryPublicEndpoint,
 } from '../../lib/public-endpoints.js'
 import { resolveCustomDomainRoutingForServer } from '../../lib/custom-domain-routing.js'
 import { deleteContainerWithDeps } from './container-cleanup.js'
@@ -61,19 +57,6 @@ function formatContainer(c: typeof containers.$inferSelect) {
   }
 }
 
-function formatZoneployEndpoint(endpoint: typeof zoneployPublicEndpoints.$inferSelect) {
-  return {
-    id: endpoint.id,
-    containerId: endpoint.ownerId,
-    port: endpoint.port,
-    hostnameLabel: endpoint.hostnameLabel,
-    fullDomain: getZoneployFullDomain('container', endpoint.hostnameLabel),
-    isPrimary: endpoint.isPrimary,
-    createdAt: endpoint.createdAt.toISOString(),
-    updatedAt: endpoint.updatedAt.toISOString(),
-  }
-}
-
 function formatCustomEndpoint(endpoint: typeof customPublicEndpoints.$inferSelect) {
   return {
     id: endpoint.id,
@@ -88,11 +71,10 @@ function formatCustomEndpoint(endpoint: typeof customPublicEndpoints.$inferSelec
 }
 
 async function enrichContainer(container: typeof containers.$inferSelect) {
-  const [serverRow, zoneployRows, customRows, envRow] = await Promise.all([
+  const [serverRow, customRows, envRow] = await Promise.all([
     container.serverId
       ? db.select({ name: servers.name }).from(servers).where(eq(servers.id, container.serverId)).limit(1).then(r => r[0] ?? null)
       : Promise.resolve(null),
-    listZoneployEndpoints('container', container.id),
     listCustomEndpoints('container', container.id),
     container.environmentId
       ? db
@@ -105,7 +87,7 @@ async function enrichContainer(container: typeof containers.$inferSelect) {
       : Promise.resolve(null),
   ])
 
-  const preferredHost = getPreferredPublicHost('container', zoneployRows, customRows)
+  const preferredHost = getPreferredPublicHost(customRows)
 
   return {
     ...formatContainer(container),
@@ -237,7 +219,6 @@ export async function deleteContainer(orgId: string, containerId: string, userId
     },
     stopContainer: (server, dockerId) => getContainerAgentClient(server as typeof servers.$inferSelect).stopContainer(server as typeof servers.$inferSelect, dockerId),
     clearRuntimeRoutes: (server, id) => getContainerAgentClient(server as typeof servers.$inferSelect).clearContainerRoutes(server as typeof servers.$inferSelect, id),
-    listZoneployRows: (id) => listZoneployEndpoints('container', id),
     listCustomRows: (id) => listCustomEndpoints('container', id),
     removeHostsFromRedis: async (hosts) => {
       for (const host of hosts) {
@@ -249,10 +230,6 @@ export async function deleteContainer(orgId: string, containerId: string, userId
       .update(addOnBindings)
       .set({ status: 'disabled', deletedAt: new Date(), deleteReason: 'container_deleted', updatedAt: new Date() })
       .where(and(eq(addOnBindings.ownerType, 'container'), eq(addOnBindings.ownerId, id), isNull(addOnBindings.deletedAt))),
-    softDeleteZoneployEndpoints: (id) => db
-      .update(zoneployPublicEndpoints)
-      .set({ isPrimary: false, deletedAt: new Date(), deleteReason: 'container_deleted', updatedAt: new Date() })
-      .where(and(eq(zoneployPublicEndpoints.ownerType, 'container'), eq(zoneployPublicEndpoints.ownerId, id), isNull(zoneployPublicEndpoints.deletedAt))),
     softDeleteCustomEndpoints: (id) => db
       .update(customPublicEndpoints)
       .set({ isPrimary: false, verified: false, deletedAt: new Date(), deleteReason: 'container_deleted', updatedAt: new Date() })
@@ -307,10 +284,7 @@ export async function deployContainer(
   if (container.status === 'deploying') throw new ValidationError('The container is already being deployed')
   if (!container.image && !options?.git) throw new ValidationError('The container is waiting for its first deploy. Configure CI/CD and push to start it.')
 
-  const [zoneployRows, customRows] = await Promise.all([
-    listZoneployEndpoints('container', containerId),
-    listCustomEndpoints('container', containerId),
-  ])
+  const customRows = await listCustomEndpoints('container', containerId)
 
   const registryUser = options?.registry?.registryUser
   const registryPassword = options?.registry?.registryPassword
@@ -405,7 +379,7 @@ export async function deployContainer(
         await log('deploy.log.pulling', 'info', false, { image: container.image! })
       }
 
-      const portMappings = buildContainerPortMappings(zoneployRows, customRows)
+      const portMappings = buildContainerPortMappings(customRows)
 
       let deployedImage: string
       let result: { dockerId: string; imageDigest: string; containerName: string }
@@ -471,7 +445,6 @@ export async function deployContainer(
       })
       const customRouting = await resolveCustomDomainRoutingForServer(server.id)
       const routeWrites = buildContainerRedisRouteWrites({
-        zoneployRows,
         customRows,
         routeTarget,
         customDomainRoutingMode: customRouting.mode,

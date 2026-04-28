@@ -6,6 +6,7 @@ export * from "./config.js";
 export * from "./debug.js";
 export * from "./deployments.js";
 export * from "./detect.js";
+export * from "./firewall-manager.js";
 export * from "./paths.js";
 export * from "./ports.js";
 export * from "./preflight.js";

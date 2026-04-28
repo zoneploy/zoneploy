@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
-  Plus, Box, Layers, Trash2, X, Copy, Check,
+  Plus, Box, Layers, Trash2, Copy, Check,
   GitBranch, RotateCcw, ScrollText, Square, Play,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -161,7 +161,6 @@ function ResourceSelectors({
 function CreateContainerForm({ orgId, onClose }: { orgId: string; onClose: () => void }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [extraPorts, setExtraPorts] = useState<Array<{ id: string; value: string }>>([])
   const [deployToken, setDeployToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [projectId, setProjectId] = useState('')
@@ -189,20 +188,8 @@ function CreateContainerForm({ orgId, onClose }: { orgId: string; onClose: () =>
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const getValidExtraPorts = () =>
-    extraPorts
-      .map(p => parseInt(p.value))
-      .filter(p => !isNaN(p) && p >= 1 && p <= 65535)
-
   const create = useMutation({
-    mutationFn: async (data: CreateContainerInput) => {
-      const result = await containersApi.create(orgId, data)
-      const validPorts = getValidExtraPorts()
-      if (validPorts.length > 0) {
-        await Promise.all(validPorts.map(port => domainsApi.addZoneploy(orgId, result.id, port)))
-      }
-      return result
-    },
+    mutationFn: (data: CreateContainerInput) => containersApi.create(orgId, data),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['containers', orgId] })
       setDeployToken(result.deployToken)
@@ -266,29 +253,6 @@ function CreateContainerForm({ orgId, onClose }: { orgId: string; onClose: () =>
           Containers are intended for stateless workloads. Use Stacks for databases or persistent storage.
         </p>
       </div>
-
-      {extraPorts.length > 0 && (
-        <div className="space-y-2">
-          {extraPorts.map(ep => (
-            <div key={ep.id} className="flex items-center gap-2">
-              <Input
-                type="number" placeholder="8080"
-                value={ep.value}
-                onChange={e => setExtraPorts(prev => prev.map(p => p.id === ep.id ? { ...p, value: e.target.value } : p))}
-                className="flex-1"
-              />
-              <button type="button" onClick={() => setExtraPorts(prev => prev.filter(p => p.id !== ep.id))}
-                className="text-text-secondary hover:text-red-400 transition-colors">
-                <X size={15} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <button type="button" onClick={() => setExtraPorts(prev => [...prev, { id: crypto.randomUUID(), value: '' }])}
-        className="text-xs text-primary hover:text-primary/80 transition-colors">
-        + {t('containers.addPort')}
-      </button>
 
       <div className="flex justify-end gap-2 pt-1">
         <Button type="button" variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
@@ -439,12 +403,11 @@ function ContainerCard({
   })
 
   const allPorts = [
-    ...(domainMappings?.zoneploy ?? []).map(mapping => mapping.port),
     ...(domainMappings?.custom ?? []).map(mapping => mapping.port),
   ]
   const portCount = Math.max(1, new Set(allPorts).size || 0)
   const domainCount = domainMappings
-    ? (domainMappings.zoneploy.length + domainMappings.custom.length)
+    ? domainMappings.custom.length
     : (publicHost ? 1 : 0)
   const environmentColor = container.environmentId ? environmentColors[container.environmentId] : null
   const iconTone =

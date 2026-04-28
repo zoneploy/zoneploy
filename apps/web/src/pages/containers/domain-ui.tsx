@@ -1,34 +1,12 @@
 import { Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-const RESERVED_ZONEPLOY_NAMES = new Set([
-  'admin',
-  'api',
-  'app',
-  'assets',
-  'cdn',
-  'dashboard',
-  'docs',
-  'mail',
-  'proxy',
-  'registry',
-  'smtp',
-  'static',
-  'status',
-  'support',
-  'www',
-])
-
 export function copyToClipboard(text: string) {
   return navigator.clipboard.writeText(text)
 }
 
 export function sanitizePort(value: string) {
   return value.replace(/[^\d]/g, '').slice(0, 5)
-}
-
-export function sanitizeZoneployName(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 63)
 }
 
 export function sanitizeHostname(value: string) {
@@ -40,16 +18,8 @@ export function isValidPort(value: string) {
   return Number.isInteger(port) && port >= 1 && port <= 65535
 }
 
-export function isValidZoneployName(value: string) {
-  return /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(value) && !RESERVED_ZONEPLOY_NAMES.has(value)
-}
-
 export function isValidHostname(value: string) {
   return /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(value)
-}
-
-export function getZoneployDomainSuffix(fullDomain: string, slug: string) {
-  return fullDomain.startsWith(slug) ? fullDomain.slice(slug.length) : ''
 }
 
 export function ServiceMeta({
@@ -81,14 +51,14 @@ export function DnsRecordCard({
   recordType: 'A' | 'AAAA' | 'CNAME' | null
   hostname: string
   target: string
-  routingMode: 'platform' | 'server-addon' | 'disabled'
+  routingMode: 'server' | 'disabled'
 }) {
   const { t } = useTranslation()
 
   if (!recordType || !target) return null
   const hint = recordType === 'CNAME'
     ? t('domains.hostnameDnsHint')
-    : routingMode === 'server-addon'
+    : routingMode === 'server'
       ? t('domains.serverEdgeHint')
       : t('domains.ipDnsHint')
 

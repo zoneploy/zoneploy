@@ -24,7 +24,7 @@ export interface ContainerItem {
   projectName?: string | null
   domain?: {
     hostname: string
-    kind: 'zoneploy' | 'custom'
+    kind: 'custom'
     verified: boolean
   } | null
 }

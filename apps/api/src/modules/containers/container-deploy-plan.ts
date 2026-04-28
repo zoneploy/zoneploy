@@ -1,11 +1,4 @@
 import type { CustomDomainRoutingMode } from '../../lib/custom-domain-routing.js'
-import { getZoneployFullDomain, getZoneployRouterSubdomain } from '../../lib/public-endpoints.js'
-
-type ZoneployEndpointLike = {
-  hostnameLabel: string
-  port: number
-  isPrimary: boolean
-}
 
 type CustomEndpointLike = {
   hostname: string
@@ -15,33 +8,18 @@ type CustomEndpointLike = {
 }
 
 export function buildContainerPortMappings(
-  zoneployRows: ZoneployEndpointLike[],
   customRows: CustomEndpointLike[],
 ) {
   const grouped = new Map<number, {
     port: number
     isPrimary: boolean
-    zoneploySubdomains: string[]
     customDomains: string[]
   }>()
-
-  for (const endpoint of zoneployRows) {
-    const bucket = grouped.get(endpoint.port) ?? {
-      port: endpoint.port,
-      isPrimary: false,
-      zoneploySubdomains: [],
-      customDomains: [],
-    }
-    bucket.zoneploySubdomains.push(getZoneployRouterSubdomain('container', endpoint.hostnameLabel))
-    bucket.isPrimary = bucket.isPrimary || endpoint.isPrimary
-    grouped.set(endpoint.port, bucket)
-  }
 
   for (const endpoint of customRows) {
     const bucket = grouped.get(endpoint.port) ?? {
       port: endpoint.port,
       isPrimary: false,
-      zoneploySubdomains: [],
       customDomains: [],
     }
     if (endpoint.verified) {
@@ -52,7 +30,7 @@ export function buildContainerPortMappings(
   }
 
   return Array.from(grouped.values())
-    .filter(mapping => mapping.zoneploySubdomains.length > 0 || mapping.customDomains.length > 0)
+    .filter(mapping => mapping.customDomains.length > 0)
     .sort((a, b) => a.port - b.port)
 }
 
@@ -68,17 +46,13 @@ export function buildContainerGatewayRouteTarget(input: {
 }
 
 export function buildContainerRedisRouteWrites(input: {
-  zoneployRows: ZoneployEndpointLike[]
   customRows: CustomEndpointLike[]
   routeTarget: string
   customDomainRoutingMode: CustomDomainRoutingMode
 }) {
-  const writes = input.zoneployRows.map(endpoint => ({
-    hostname: getZoneployFullDomain('container', endpoint.hostnameLabel),
-    target: input.routeTarget,
-  }))
+  const writes: Array<{ hostname: string; target: string }> = []
 
-  if (input.customDomainRoutingMode === 'platform') {
+  if (input.customDomainRoutingMode === 'server') {
     for (const endpoint of input.customRows) {
       if (endpoint.verified) {
         writes.push({ hostname: endpoint.hostname, target: input.routeTarget })

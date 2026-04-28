@@ -1,11 +1,3 @@
-import { getZoneployRouterSubdomain } from '../../lib/public-endpoints.js'
-
-type ContainerZoneployEndpointLike = {
-  port: number
-  hostnameLabel: string
-  isPrimary: boolean
-}
-
 type ContainerCustomEndpointLike = {
   port: number
   hostname: string
@@ -16,7 +8,6 @@ type ContainerCustomEndpointLike = {
 export type ContainerPortMapping = {
   port: number
   isPrimary: boolean
-  zoneploySubdomains: string[]
   customDomains: string[]
 }
 
@@ -42,22 +33,9 @@ type SyncContainerRoutesDeps = {
 }
 
 export function buildContainerPortMappingsFromEndpoints(
-  zoneployRows: ContainerZoneployEndpointLike[],
   customRows: ContainerCustomEndpointLike[],
 ) {
   const grouped = new Map<number, ContainerPortMapping>()
-
-  for (const endpoint of zoneployRows) {
-    const bucket = grouped.get(endpoint.port) ?? {
-      port: endpoint.port,
-      isPrimary: false,
-      zoneploySubdomains: [],
-      customDomains: [],
-    }
-    bucket.zoneploySubdomains.push(getZoneployRouterSubdomain('container', endpoint.hostnameLabel))
-    bucket.isPrimary = bucket.isPrimary || endpoint.isPrimary
-    grouped.set(endpoint.port, bucket)
-  }
 
   for (const endpoint of customRows) {
     if (!endpoint.verified) continue
@@ -65,7 +43,6 @@ export function buildContainerPortMappingsFromEndpoints(
     const bucket = grouped.get(endpoint.port) ?? {
       port: endpoint.port,
       isPrimary: false,
-      zoneploySubdomains: [],
       customDomains: [],
     }
     bucket.customDomains.push(endpoint.hostname)
@@ -74,7 +51,7 @@ export function buildContainerPortMappingsFromEndpoints(
   }
 
   return Array.from(grouped.values())
-    .filter(mapping => mapping.zoneploySubdomains.length > 0 || mapping.customDomains.length > 0)
+    .filter(mapping => mapping.customDomains.length > 0)
     .sort((a, b) => a.port - b.port)
 }
 

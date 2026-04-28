@@ -225,6 +225,24 @@ install_packages() {
   esac
 }
 
+detect_host_ip() {
+  local host_ip
+  host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  printf '%s' "${host_ip:-127.0.0.1}"
+}
+
+set_default_app_url_for_self_host() {
+  if [ -n "$APP_URL_WAS_PROVIDED" ]; then
+    return
+  fi
+
+  case "$APP_URL" in
+    http://localhost:*|https://localhost:*|http://127.0.0.1:*|https://127.0.0.1:*)
+      APP_URL="http://$(detect_host_ip):${ZONEPLOY_WEB_PORT}"
+      ;;
+  esac
+}
+
 require_supported_host() {
   [ "$(uname -s 2>/dev/null || true)" = "Linux" ] || fail "Zoneploy can only be installed on Linux."
   [ "$(id -u)" -eq 0 ] || fail "Run this installer as root."
@@ -1033,8 +1051,7 @@ uninstall_zoneploy() {
 
 print_summary() {
   local host_ip
-  host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  host_ip="${host_ip:-127.0.0.1}"
+  host_ip="$(detect_host_ip)"
 
   cat <<SUMMARY
 
@@ -1093,6 +1110,7 @@ install_pnpm
 install_docker
 prepare_source
 build_source
+set_default_app_url_for_self_host
 write_env_file
 write_stack_env_file
 write_command_shims

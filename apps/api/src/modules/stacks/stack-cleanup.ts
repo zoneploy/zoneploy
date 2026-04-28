@@ -9,7 +9,6 @@ type CleanupDeps<TServer> = {
   purgeRuntime: (server: TServer, stackId: string, projectName: string) => Promise<unknown>
   clearRedisRoutes: (stackId: string) => Promise<unknown>
   softDeleteAddOnBindings: (stackId: string) => Promise<unknown>
-  softDeleteZoneployEndpoints: (stackId: string) => Promise<unknown>
   softDeleteCustomEndpoints: (stackId: string) => Promise<unknown>
   softDelete: (stackId: string) => Promise<unknown>
 }
@@ -28,7 +27,6 @@ export async function deleteStackWithDeps<TServer>(
   await Promise.all([
     deps.softDelete(stack.id),
     deps.softDeleteAddOnBindings(stack.id),
-    deps.softDeleteZoneployEndpoints(stack.id),
     deps.softDeleteCustomEndpoints(stack.id),
     deps.clearRedisRoutes(stack.id),
   ])

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Flame, Globe, Plus, Server, Shield, Trash2, Wrench } from 'lucide-react'
+import { ArrowLeft, Flame, Globe, Plus, Server, Trash2, Wrench } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { addonsApi } from '@/api/addons'
 import { serversApi } from '@/api/servers'
@@ -151,7 +151,7 @@ function joinUsageComponents(usages: FirewallPortUsage[]) {
 
 function getClosePortMessageKey(port: number, usages: FirewallPortUsage[]) {
   if (usages.length > 0) return 'addons.closeUsedTcpPortConfirmMsg'
-  if (port === 80 || port === 443) return 'addons.closeEdgeTcpPortConfirmMsg'
+  if (port === 80 || port === 443) return 'addons.closePublicHttpTcpPortConfirmMsg'
   return 'addons.closeTcpPortConfirmMsg'
 }
 
@@ -164,9 +164,6 @@ export function AddonManagePage() {
   const orgId = session?.org?.id ?? ''
   const { can } = usePermissions()
   const canManage = can('servers:connect')
-  const [acmeEmail, setAcmeEmail] = useState('')
-  const [directoryUrl, setDirectoryUrl] = useState('')
-  const [resolverName, setResolverName] = useState('')
   const [allowedTcpPortRows, setAllowedTcpPortRows] = useState<string[]>(['22'])
   const [newTcpPortInput, setNewTcpPortInput] = useState('')
   const [confirmAction, setConfirmAction] = useState<'install' | 'uninstall' | 'forceUninstall' | 'save' | 'reset' | null>(null)
@@ -210,9 +207,6 @@ export function AddonManagePage() {
 
   useEffect(() => {
     const source = (installation?.config ?? {}) as Record<string, unknown>
-    setAcmeEmail(typeof source.acmeEmail === 'string' ? source.acmeEmail : '')
-    setDirectoryUrl(typeof source.directoryUrl === 'string' ? source.directoryUrl : '')
-    setResolverName(typeof source.resolverName === 'string' ? source.resolverName : '')
     setAllowedTcpPortRows(
       Array.from(new Set([...readPortList(source.allowedTcpPorts, [protectedSshPort, protectedAgentPort]), protectedSshPort, protectedAgentPort]))
         .sort((a, b) => a - b)
@@ -235,16 +229,10 @@ export function AddonManagePage() {
       orgId,
       serverId,
       addon!.addOnId,
-      addonSlug === 'firewall-manager'
-        ? {
-            enabled: true,
-            allowedTcpPorts: parsedFirewallPorts.ports,
-          }
-        : {
-            acmeEmail: acmeEmail.trim(),
-            directoryUrl: directoryUrl.trim(),
-            resolverName: resolverName.trim(),
-          },
+      {
+        enabled: true,
+        allowedTcpPorts: parsedFirewallPorts.ports,
+      },
     ),
     onSuccess: () => {
       setConfirmAction(null)
@@ -315,7 +303,6 @@ export function AddonManagePage() {
       'rollbackTimeoutSeconds',
     ].includes(key))
   const isInstalled = installation?.status === 'active'
-  const isCustomDomainsEdge = addon.slug === 'custom-domains-edge'
   const isFirewallManager = addon.slug === 'firewall-manager'
   const addonDisplayName = t(`addons.items.${addon.slug}.name`, { defaultValue: addon.name })
   const storedConfig = (installation?.config ?? {}) as Record<string, unknown>
@@ -357,11 +344,7 @@ export function AddonManagePage() {
         parsedFirewallPorts.ports.join(',') !== storedFirewallPorts.join(',')
         || storedConfig.enabled === false
       )
-    : (
-        acmeEmail.trim() !== (typeof storedConfig.acmeEmail === 'string' ? storedConfig.acmeEmail : '')
-        || directoryUrl.trim() !== (typeof storedConfig.directoryUrl === 'string' ? storedConfig.directoryUrl : '')
-        || resolverName.trim() !== (typeof storedConfig.resolverName === 'string' ? storedConfig.resolverName : '')
-      )
+    : false
   const currentMutation = (
     confirmAction === 'install' ? install
       : confirmAction === 'uninstall' || confirmAction === 'forceUninstall' ? uninstall
@@ -447,56 +430,6 @@ export function AddonManagePage() {
           </div>
         )}
       </Card>
-
-      {isInstalled && isCustomDomainsEdge && (
-        <Card className="space-y-5">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Shield size={18} strokeWidth={1.8} />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-text-primary">{t('addons.edgeConfigTitle')}</p>
-              <p className="text-xs text-text-secondary">{t('addons.edgeConfigSubtitle')}</p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t('addons.acmeEmail')}</Label>
-              <Input value={acmeEmail} onChange={e => setAcmeEmail(e.target.value)} disabled={!canManage} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t('addons.resolverName')}</Label>
-              <Input value={resolverName} onChange={e => setResolverName(e.target.value)} disabled={!canManage} />
-            </div>
-            <div className="space-y-1.5 lg:col-span-2">
-              <Label className="text-xs">{t('addons.directoryUrl')}</Label>
-              <Input value={directoryUrl} onChange={e => setDirectoryUrl(e.target.value)} disabled={!canManage} />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => setConfirmAction('reset')}
-              loading={resetToDefaults.isPending}
-              disabled={!canManage}
-            >
-              {t('addons.resetDefaults')}
-            </Button>
-            <Button
-              onClick={() => setConfirmAction('save')}
-              loading={save.isPending}
-              disabled={!canManage || !acmeEmail.trim() || !directoryUrl.trim() || !resolverName.trim() || !isConfigDirty}
-            >
-              {t('common.save')}
-            </Button>
-          </div>
-
-          {save.error && <p className="text-xs text-destructive">{getApiError(save.error, t)}</p>}
-          {resetToDefaults.error && <p className="text-xs text-destructive">{getApiError(resetToDefaults.error, t)}</p>}
-        </Card>
-      )}
 
       {isInstalled && isFirewallManager && (
         <Card className="space-y-5">

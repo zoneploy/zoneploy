@@ -50,7 +50,12 @@ function addonIcon(addon: OrgAddon) {
   }
 }
 
-function managedComponentIcon(kind: string) {
+function managedComponentIcon(kind: string, name?: string) {
+  const normalizedName = name?.toLowerCase() ?? ''
+  if (normalizedName.includes('ufw')) return Shield
+  if (normalizedName.includes('firewalld')) return Flame
+  if (normalizedName.includes('iptables')) return Network
+
   switch (kind) {
     case 'firewall':
       return Flame
@@ -204,7 +209,7 @@ function AddonCard({
       {managedComponents.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {managedComponents.map(component => {
-            const ComponentIcon = managedComponentIcon(component.kind)
+            const ComponentIcon = managedComponentIcon(component.kind, component.name)
             return (
               <span
                 key={`${component.kind}-${component.name}`}

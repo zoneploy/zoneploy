@@ -67,20 +67,6 @@ export interface StackSecretKey {
   updatedAt: string
 }
 
-export interface StackZoneployEndpointInfo {
-  id: string
-  stackId: string
-  resolvedServiceName?: string | null
-  portResolved?: boolean
-  port: number
-  slug: string
-  hostnameLabel: string
-  fullDomain: string
-  isPrimary: boolean
-  createdAt: string
-  updatedAt: string
-}
-
 export interface StackCustomEndpointInfo {
   id: string
   stackId: string
@@ -92,23 +78,20 @@ export interface StackCustomEndpointInfo {
   isPrimary: boolean
   dnsTarget: string
   dnsRecordType: 'A' | 'AAAA' | 'CNAME' | null
-  routingMode: 'platform' | 'server-addon' | 'disabled'
+  routingMode: 'server' | 'disabled'
   createdAt: string
   updatedAt: string
 }
 
 export interface StackCustomRoutingInfo {
-  mode: 'platform' | 'server-addon' | 'disabled'
+  mode: 'server' | 'disabled'
   enabled: boolean
-  addonSlug: string
   serverId: string | null
-  installationId: string | null
   dnsTarget: string
   dnsRecordType: 'A' | 'AAAA' | 'CNAME' | null
 }
 
 export interface StackDomainsResponse {
-  zoneploy: StackZoneployEndpointInfo[]
   custom: StackCustomEndpointInfo[]
   customRouting: StackCustomRoutingInfo
 }
@@ -274,15 +257,6 @@ export const stacksApi = {
 
   listDomains: (orgId: string, stackId: string) =>
     apiClient.get<StackDomainsResponse>(`/organizations/${orgId}/stacks/${stackId}/domains`),
-
-  addZoneployDomain: (orgId: string, stackId: string, port: number) =>
-    apiClient.post<StackZoneployEndpointInfo>(`/organizations/${orgId}/stacks/${stackId}/domains/zoneploy`, { port }),
-
-  updateZoneployDomain: (orgId: string, stackId: string, endpointId: string, updates: { port?: number; slug?: string }) =>
-    apiClient.patch<StackZoneployEndpointInfo>(`/organizations/${orgId}/stacks/${stackId}/domains/zoneploy/${endpointId}`, updates),
-
-  removeZoneployDomain: (orgId: string, stackId: string, endpointId: string) =>
-    apiClient.delete(`/organizations/${orgId}/stacks/${stackId}/domains/zoneploy/${endpointId}`),
 
   addCustomDomain: (orgId: string, stackId: string, payload: { port: number; customDomain: string }) =>
     apiClient.post<StackCustomEndpointInfo>(`/organizations/${orgId}/stacks/${stackId}/domains/custom`, payload),

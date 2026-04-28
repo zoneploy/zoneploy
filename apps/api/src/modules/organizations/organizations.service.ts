@@ -12,14 +12,12 @@ import {
   serverAddOnInstallations,
   servers,
   stacks,
-  zoneployPublicEndpoints,
 } from '../../db/schema.js'
 import { NotFoundError, ForbiddenError, ConflictError, AppError } from '../../lib/errors.js'
 import { generateSlug } from '../../lib/slug.js'
 import { createNotification } from '../notifications/notifications.service.js'
 import { resolvePermissions } from '../../plugins/authorize.js'
 import { redis, REDIS_KEYS } from '../../lib/redis.js'
-import { getZoneployFullDomain } from '../../lib/public-endpoints.js'
 import { encrypt } from '../../lib/crypto.js'
 import type { OrgRole } from '@zoneploy/types'
 
@@ -228,16 +226,10 @@ export async function deleteOrg(orgId: string, userId: string) {
   if (!org) throw new NotFoundError('Organization not found')
   if (org.ownerId !== userId) throw new ForbiddenError('Only the owner can delete the organization')
 
-  const [zoneployEndpoints, customEndpoints] = await Promise.all([
-    db
-      .select({ ownerType: zoneployPublicEndpoints.ownerType, hostnameLabel: zoneployPublicEndpoints.hostnameLabel })
-      .from(zoneployPublicEndpoints)
-      .where(and(eq(zoneployPublicEndpoints.orgId, orgId), isNull(zoneployPublicEndpoints.deletedAt))),
-    db
-      .select({ hostname: customPublicEndpoints.hostname })
-      .from(customPublicEndpoints)
-      .where(and(eq(customPublicEndpoints.orgId, orgId), isNull(customPublicEndpoints.deletedAt))),
-  ])
+  const customEndpoints = await db
+    .select({ hostname: customPublicEndpoints.hostname })
+    .from(customPublicEndpoints)
+    .where(and(eq(customPublicEndpoints.orgId, orgId), isNull(customPublicEndpoints.deletedAt)))
 
   const now = new Date()
   await db.transaction(async tx => {
@@ -250,10 +242,6 @@ export async function deleteOrg(orgId: string, userId: string) {
         .update(serverAddOnInstallations)
         .set({ status: 'disabled', deletedAt: now, deletedByUserId: userId, deleteReason: 'organization_deleted', updatedAt: now })
         .where(and(eq(serverAddOnInstallations.orgId, orgId), isNull(serverAddOnInstallations.deletedAt))),
-      tx
-        .update(zoneployPublicEndpoints)
-        .set({ isPrimary: false, deletedAt: now, deletedByUserId: userId, deleteReason: 'organization_deleted', updatedAt: now })
-        .where(and(eq(zoneployPublicEndpoints.orgId, orgId), isNull(zoneployPublicEndpoints.deletedAt))),
       tx
         .update(customPublicEndpoints)
         .set({ isPrimary: false, verified: false, deletedAt: now, deletedByUserId: userId, deleteReason: 'organization_deleted', updatedAt: now })
@@ -286,7 +274,6 @@ export async function deleteOrg(orgId: string, userId: string) {
   })
 
   const routeHosts = [
-    ...zoneployEndpoints.map(endpoint => getZoneployFullDomain(endpoint.ownerType, endpoint.hostnameLabel)),
     ...customEndpoints.map(endpoint => endpoint.hostname),
   ]
 

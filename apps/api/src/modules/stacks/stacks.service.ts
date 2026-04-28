@@ -8,7 +8,6 @@ import {
   servers,
   environments,
   projects,
-  zoneployPublicEndpoints,
   customPublicEndpoints,
   addOnBindings,
 } from '../../db/schema.js'
@@ -31,24 +30,13 @@ import { buildStackRouteMappingsWithDeps, syncStackRuntimeRoutesWithDeps } from 
 import { deleteStackWithDeps } from './stack-cleanup.js'
 import {
   addStackCustomEndpointWithDeps,
-  addStackZoneployEndpointWithDeps,
   removeStackCustomEndpointWithDeps,
-  removeStackZoneployEndpointWithDeps,
-  updateStackZoneployEndpointWithDeps,
   updateStackCustomEndpointWithDeps,
   verifyStackCustomEndpointWithDeps,
 } from './stack-domain-operations.js'
+import { resolveCustomDomainRoutingForOwner } from '../../lib/custom-domain-routing.js'
 import {
-  CUSTOM_DOMAINS_EDGE_SLUG,
-  resolveCustomDomainRoutingForOwner,
-} from '../../lib/custom-domain-routing.js'
-import {
-  assertValidZoneploySlug,
-  buildZoneployHostnameLabel,
-  generateZoneploySlug,
-  getZoneployFullDomain,
   listCustomEndpoints,
-  listZoneployEndpoints,
   promoteNextPrimaryPublicEndpoint,
 } from '../../lib/public-endpoints.js'
 import {
@@ -167,20 +155,6 @@ async function resolveStackPublicEndpoint(
   }
 }
 
-function formatStackZoneployEndpoint(endpoint: typeof zoneployPublicEndpoints.$inferSelect) {
-  return {
-    id: endpoint.id,
-    stackId: endpoint.ownerId,
-    port: endpoint.port,
-    slug: endpoint.hostnameLabel,
-    hostnameLabel: endpoint.hostnameLabel,
-    fullDomain: getZoneployFullDomain('stack', endpoint.hostnameLabel),
-    isPrimary: endpoint.isPrimary,
-    createdAt: endpoint.createdAt.toISOString(),
-    updatedAt: endpoint.updatedAt.toISOString(),
-  }
-}
-
 function formatStackCustomEndpoint(
   endpoint: typeof customPublicEndpoints.$inferSelect,
   routing: Awaited<ReturnType<typeof resolveCustomDomainRoutingForOwner>>,
@@ -205,10 +179,8 @@ function formatStackCustomRouting(
 ) {
   return {
     mode: routing.mode,
-    enabled: routing.mode === 'server-addon' && !!routing.target && !!routing.recordType,
-    addonSlug: CUSTOM_DOMAINS_EDGE_SLUG,
+    enabled: routing.mode === 'server' && !!routing.target && !!routing.recordType,
     serverId: routing.serverId,
-    installationId: routing.installationId,
     dnsTarget: routing.target,
     dnsRecordType: routing.recordType,
   }
@@ -217,8 +189,8 @@ function formatStackCustomRouting(
 function assertStackCustomDomainsEnabled(
   routing: Awaited<ReturnType<typeof resolveCustomDomainRoutingForOwner>>,
 ) {
-  if (routing.mode !== 'server-addon' || !routing.target || !routing.recordType) {
-    throw new AppError(403, 'CUSTOM_DOMAINS_ADDON_REQUIRED', 'Install Custom Domains Edge on this server to use custom domains')
+  if (routing.mode !== 'server' || !routing.target || !routing.recordType) {
+    throw new AppError(403, 'CUSTOM_DOMAIN_ROUTING_DISABLED', 'Custom domain routing is not available for this server')
   }
 }
 
@@ -380,24 +352,16 @@ async function getStackBackupPolicyRow(stackId: string) {
   return policy ?? null
 }
 
-async function listStackZoneployRows(stackId: string) {
-  return listZoneployEndpoints('stack', stackId)
-}
-
 async function listStackCustomRows(stackId: string) {
   return listCustomEndpoints('stack', stackId)
 }
 
 async function getStackEndpointCounts(stackId: string) {
-  const [zoneployRows, customRows] = await Promise.all([
-    listStackZoneployRows(stackId),
-    listStackCustomRows(stackId),
-  ])
+  const customRows = await listStackCustomRows(stackId)
 
   return {
-    zoneployRows,
     customRows,
-    total: zoneployRows.length + customRows.length,
+    total: customRows.length,
   }
 }
 
@@ -421,19 +385,10 @@ async function syncRedisForStackDomains(stackId: string) {
   const routePort = server.agentMode === 'self_hosted' ? 80 : config.CERTS_PATH ? 443 : 8899
   const routeTarget = JSON.stringify({ ip: server.ipAddress, port: routePort })
   const customRouting = await resolveCustomDomainRoutingForOwner('stack', stackId)
-  const [zoneployRows, customRows] = await Promise.all([
-    listStackZoneployRows(stackId),
-    listStackCustomRows(stackId),
-  ])
-
-  for (const endpoint of zoneployRows) {
-    const { portResolved } = await resolveStackPublicEndpoint(stack, endpoint.port, server)
-    if (!portResolved) continue
-    await redis.hset(REDIS_KEYS.routesHash, getZoneployFullDomain('stack', endpoint.hostnameLabel), routeTarget)
-  }
+  const customRows = await listStackCustomRows(stackId)
 
   for (const endpoint of customRows) {
-    if (customRouting.mode !== 'platform') continue
+    if (customRouting.mode !== 'server') continue
     const { portResolved } = await resolveStackPublicEndpoint(stack, endpoint.port, server)
     if (!portResolved || !endpoint.verified) continue
     await redis.hset(REDIS_KEYS.routesHash, endpoint.hostname, routeTarget)
@@ -441,14 +396,7 @@ async function syncRedisForStackDomains(stackId: string) {
 }
 
 async function clearRedisForStackDomains(stackId: string) {
-  const [zoneployRows, customRows] = await Promise.all([
-    listStackZoneployRows(stackId),
-    listStackCustomRows(stackId),
-  ])
-
-  for (const endpoint of zoneployRows) {
-    await redis.hdel(REDIS_KEYS.routesHash, getZoneployFullDomain('stack', endpoint.hostnameLabel))
-  }
+  const customRows = await listStackCustomRows(stackId)
 
   for (const endpoint of customRows) {
     await redis.hdel(REDIS_KEYS.routesHash, endpoint.hostname)
@@ -463,7 +411,6 @@ async function buildStackRouteMappings(
   return buildStackRouteMappingsWithDeps(
     stack,
     {
-      listZoneployRows: listStackZoneployRows,
       listCustomRows: listStackCustomRows,
       resolvePublicEndpoint: resolveStackPublicEndpoint,
     },
@@ -626,10 +573,6 @@ export async function deleteStack(orgId: string, stackId: string) {
       .update(addOnBindings)
       .set({ status: 'disabled', deletedAt: new Date(), deleteReason: 'stack_deleted', updatedAt: new Date() })
       .where(and(eq(addOnBindings.ownerType, 'stack'), eq(addOnBindings.ownerId, id), isNull(addOnBindings.deletedAt))),
-    softDeleteZoneployEndpoints: (id) => db
-      .update(zoneployPublicEndpoints)
-      .set({ isPrimary: false, deletedAt: new Date(), deleteReason: 'stack_deleted', updatedAt: new Date() })
-      .where(and(eq(zoneployPublicEndpoints.ownerType, 'stack'), eq(zoneployPublicEndpoints.ownerId, id), isNull(zoneployPublicEndpoints.deletedAt))),
     softDeleteCustomEndpoints: (id) => db
       .update(customPublicEndpoints)
       .set({ isPrimary: false, verified: false, deletedAt: new Date(), deleteReason: 'stack_deleted', updatedAt: new Date() })
@@ -853,195 +796,11 @@ export async function listStackDomains(orgId: string, stackId: string) {
         .limit(1)
       return server ?? null
     },
-    listZoneployRows: listStackZoneployRows,
     listCustomRows: listStackCustomRows,
     resolvePublicEndpoint: resolveStackPublicEndpoint,
-    formatZoneployEndpoint: formatStackZoneployEndpoint,
     formatCustomEndpoint: formatStackCustomEndpoint,
     formatCustomRouting: formatStackCustomRouting,
   })
-}
-
-export async function addStackZoneployEndpoint(
-  orgId: string,
-  stackId: string,
-  input: { port: number },
-) {
-  await getStackRow(orgId, stackId)
-  const counts = await getStackEndpointCounts(stackId)
-  return addStackZoneployEndpointWithDeps(stackId, generateZoneploySlug(), counts.total, input.port, {
-    buildHostnameLabel: (slug) => buildZoneployHostnameLabel('stack', slug),
-    assertUniquePort: async (ownerId, port) => {
-      const [portConflict] = await db
-        .select({ id: zoneployPublicEndpoints.id })
-        .from(zoneployPublicEndpoints)
-        .where(and(
-          eq(zoneployPublicEndpoints.ownerType, 'stack'),
-          eq(zoneployPublicEndpoints.ownerId, ownerId),
-          eq(zoneployPublicEndpoints.port, port),
-          isNull(zoneployPublicEndpoints.deletedAt),
-        ))
-        .limit(1)
-
-      if (portConflict) {
-        throw new AppError(409, 'ZONEPLOY_PORT_ALREADY_EXISTS', `Port ${port} already has a Zoneploy domain in this stack`)
-      }
-    },
-    assertUniqueHostnameLabel: async (hostnameLabel) => {
-      const [hostnameConflict] = await db
-        .select({ id: zoneployPublicEndpoints.id })
-        .from(zoneployPublicEndpoints)
-        .where(and(
-          eq(zoneployPublicEndpoints.hostnameLabel, hostnameLabel),
-          isNull(zoneployPublicEndpoints.deletedAt),
-        ))
-        .limit(1)
-
-      if (hostnameConflict) {
-        throw new AppError(409, 'ZONEPLOY_HOSTNAME_IN_USE', `Subdomain ${hostnameLabel} is already in use`)
-      }
-    },
-    persistCreate: async (values) => {
-      const [created] = await db
-        .insert(zoneployPublicEndpoints)
-        .values({
-          orgId,
-          ownerType: 'stack',
-          ownerId: stackId,
-          port: values.port,
-          hostnameLabel: values.hostnameLabel,
-          isPrimary: values.isPrimary,
-        })
-        .returning()
-      return created
-    },
-    syncRuntime: syncStackRuntimeRoutes,
-    formatZoneployEndpoint: formatStackZoneployEndpoint,
-  })
-}
-
-export async function updateStackZoneployEndpoint(
-  orgId: string,
-  stackId: string,
-  endpointId: string,
-  updates: { port?: number; slug?: string },
-) {
-  await getStackRow(orgId, stackId)
-
-  const [endpoint] = await db
-    .select()
-    .from(zoneployPublicEndpoints)
-    .where(and(
-      eq(zoneployPublicEndpoints.id, endpointId),
-      eq(zoneployPublicEndpoints.ownerType, 'stack'),
-      eq(zoneployPublicEndpoints.ownerId, stackId),
-      isNull(zoneployPublicEndpoints.deletedAt),
-    ))
-    .limit(1)
-
-  if (!endpoint) throw new NotFoundError('Zoneploy endpoint not found')
-
-  return updateStackZoneployEndpointWithDeps(
-    stackId,
-    endpoint,
-    endpoint.hostnameLabel,
-    updates,
-    {
-      validateZoneploySlug: assertValidZoneploySlug,
-      buildHostnameLabel: (slug) => buildZoneployHostnameLabel('stack', slug),
-      removeHostsFromRedis: async (hosts) => {
-        for (const host of hosts) {
-          await redis.hdel(REDIS_KEYS.routesHash, host)
-        }
-      },
-      assertUniquePort: async (ownerId, port, currentId) => {
-        const [portConflict] = await db
-          .select({ id: zoneployPublicEndpoints.id })
-          .from(zoneployPublicEndpoints)
-          .where(and(
-            eq(zoneployPublicEndpoints.ownerType, 'stack'),
-            eq(zoneployPublicEndpoints.ownerId, ownerId),
-            eq(zoneployPublicEndpoints.port, port),
-            ne(zoneployPublicEndpoints.id, currentId),
-            isNull(zoneployPublicEndpoints.deletedAt),
-          ))
-          .limit(1)
-
-        if (portConflict) {
-          throw new AppError(409, 'ZONEPLOY_PORT_ALREADY_EXISTS', `Port ${port} already has a Zoneploy domain in this stack`)
-        }
-      },
-      assertUniqueHostnameLabel: async (hostnameLabel, currentId) => {
-        const [hostnameConflict] = await db
-          .select({ id: zoneployPublicEndpoints.id })
-          .from(zoneployPublicEndpoints)
-          .where(and(
-            eq(zoneployPublicEndpoints.hostnameLabel, hostnameLabel),
-            ne(zoneployPublicEndpoints.id, currentId),
-            isNull(zoneployPublicEndpoints.deletedAt),
-          ))
-          .limit(1)
-
-        if (hostnameConflict) {
-          throw new AppError(409, 'ZONEPLOY_HOSTNAME_IN_USE', `Subdomain ${hostnameLabel} is already in use`)
-        }
-      },
-      persistUpdate: async (id, next) => {
-        const [updated] = await db
-          .update(zoneployPublicEndpoints)
-          .set({
-            port: next.port,
-            hostnameLabel: next.hostnameLabel,
-            updatedAt: new Date(),
-          })
-          .where(eq(zoneployPublicEndpoints.id, id))
-          .returning()
-        return updated
-      },
-      syncRuntime: syncStackRuntimeRoutes,
-      formatZoneployEndpoint: formatStackZoneployEndpoint,
-    },
-  )
-}
-
-export async function removeStackZoneployEndpoint(orgId: string, stackId: string, endpointId: string) {
-  await getStackRow(orgId, stackId)
-
-  const [endpoint] = await db
-    .select()
-    .from(zoneployPublicEndpoints)
-    .where(and(
-      eq(zoneployPublicEndpoints.id, endpointId),
-      eq(zoneployPublicEndpoints.ownerType, 'stack'),
-      eq(zoneployPublicEndpoints.ownerId, stackId),
-      isNull(zoneployPublicEndpoints.deletedAt),
-    ))
-    .limit(1)
-
-  if (!endpoint) throw new NotFoundError('Zoneploy endpoint not found')
-
-  await removeStackZoneployEndpointWithDeps(stackId, endpoint, {
-    removeHostsFromRedis: async (hosts) => {
-      for (const host of hosts) {
-        await redis.hdel(REDIS_KEYS.routesHash, host)
-      }
-    },
-    deleteEndpoint: async (id) => {
-      await db
-        .update(zoneployPublicEndpoints)
-        .set({
-          isPrimary: false,
-          deletedAt: new Date(),
-          deleteReason: 'domain_removed',
-          updatedAt: new Date(),
-        })
-        .where(eq(zoneployPublicEndpoints.id, id))
-    },
-    promoteNextPrimary: promoteNextPrimaryPublicEndpoint,
-    syncRuntime: syncStackRuntimeRoutes,
-  })
-
-  return formatStackZoneployEndpoint(endpoint)
 }
 
 export async function addStackCustomEndpoint(

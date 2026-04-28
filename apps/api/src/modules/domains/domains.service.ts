@@ -1,68 +1,36 @@
 import { and, eq, isNull, ne } from 'drizzle-orm'
 import { db } from '../../db/client.js'
-import { containers, customPublicEndpoints, servers, zoneployPublicEndpoints } from '../../db/schema.js'
+import { containers, customPublicEndpoints, servers } from '../../db/schema.js'
 import { config } from '../../config.js'
 import { redis, REDIS_KEYS } from '../../lib/redis.js'
 import {
   AppError,
   NotFoundError,
 } from '../../lib/errors.js'
-import {
-  CUSTOM_DOMAINS_EDGE_SLUG,
-  resolveCustomDomainRoutingForOwner,
-} from '../../lib/custom-domain-routing.js'
+import { resolveCustomDomainRoutingForOwner } from '../../lib/custom-domain-routing.js'
 import { getContainerAgentClient } from '../../lib/server-agent-client.js'
 import {
-  assertValidZoneploySlug,
-  buildZoneployHostnameLabel,
-  generateZoneploySlug,
   getPreferredPublicHost,
-  getZoneployFullDomain,
   listCustomEndpoints,
-  listZoneployEndpoints,
   promoteNextPrimaryPublicEndpoint,
 } from '../../lib/public-endpoints.js'
 import { removeCustomDomainTls } from '../../lib/custom-domain-tls.js'
 import { findVerifiedCustomDomainConflict } from '../../lib/custom-domain-claims.js'
-import { buildDnsTargetInstructions, verifyHostnamePointsToTarget } from '../../lib/verify-dns-target.js'
+import { verifyHostnamePointsToTarget } from '../../lib/verify-dns-target.js'
 import { listContainerDomainsWithDeps } from './container-domain-listing.js'
 import { buildContainerPortMappingsFromEndpoints, syncContainerRuntimeRoutesWithDeps } from './container-runtime-routes.js'
 import {
   addContainerCustomEndpointWithDeps,
-  addContainerZoneployEndpointWithDeps,
   removeContainerCustomEndpointWithDeps,
-  removeContainerZoneployEndpointWithDeps,
-  updateContainerZoneployEndpointWithDeps,
   updateContainerCustomEndpointWithDeps,
   verifyContainerCustomEndpointWithDeps,
 } from './container-domain-operations.js'
-
-function getContainerZoneploySlug(hostnameLabel: string) {
-  if (config.SUBDOMAIN_SUFFIX && hostnameLabel.endsWith(config.SUBDOMAIN_SUFFIX)) {
-    return hostnameLabel.slice(0, -config.SUBDOMAIN_SUFFIX.length)
-  }
-  return hostnameLabel
-}
 
 function validateCustomDomain(hostname: string) {
   const re = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/
   if (!re.test(hostname)) throw new AppError(400, 'INVALID_CUSTOM_DOMAIN', 'Invalid domain format')
   if (hostname.endsWith(`.${config.ROUTING_DOMAIN}`)) {
     throw new AppError(400, 'INVALID_CUSTOM_DOMAIN', `Cannot use a ${config.ROUTING_DOMAIN} subdomain as a custom domain`)
-  }
-}
-
-function formatZoneployEndpoint(endpoint: typeof zoneployPublicEndpoints.$inferSelect) {
-  return {
-    id: endpoint.id,
-    containerId: endpoint.ownerId,
-    port: endpoint.port,
-    slug: getContainerZoneploySlug(endpoint.hostnameLabel),
-    hostnameLabel: endpoint.hostnameLabel,
-    fullDomain: getZoneployFullDomain('container', endpoint.hostnameLabel),
-    isPrimary: endpoint.isPrimary,
-    createdAt: endpoint.createdAt.toISOString(),
-    updatedAt: endpoint.updatedAt.toISOString(),
   }
 }
 
@@ -90,10 +58,8 @@ function formatCustomRouting(
 ) {
   return {
     mode: routing.mode,
-    enabled: routing.mode === 'server-addon' && !!routing.target && !!routing.recordType,
-    addonSlug: CUSTOM_DOMAINS_EDGE_SLUG,
+    enabled: routing.mode === 'server' && !!routing.target && !!routing.recordType,
     serverId: routing.serverId,
-    installationId: routing.installationId,
     dnsTarget: routing.target,
     dnsRecordType: routing.recordType,
   }
@@ -102,8 +68,8 @@ function formatCustomRouting(
 function assertCustomDomainsEnabled(
   routing: Awaited<ReturnType<typeof resolveCustomDomainRoutingForOwner>>,
 ) {
-  if (routing.mode !== 'server-addon' || !routing.target || !routing.recordType) {
-    throw new AppError(403, 'CUSTOM_DOMAINS_ADDON_REQUIRED', 'Install Custom Domains Edge on this server to use custom domains')
+  if (routing.mode !== 'server' || !routing.target || !routing.recordType) {
+    throw new AppError(403, 'CUSTOM_DOMAIN_ROUTING_DISABLED', 'Custom domain routing is not available for this server')
   }
 }
 
@@ -139,11 +105,8 @@ async function removeHostsFromRedis(hosts: string[]) {
 }
 
 async function buildContainerPortMappings(containerId: string) {
-  const [zoneployRows, customRows] = await Promise.all([
-    listZoneployEndpoints('container', containerId),
-    listCustomEndpoints('container', containerId),
-  ])
-  return buildContainerPortMappingsFromEndpoints(zoneployRows, customRows)
+  const customRows = await listCustomEndpoints('container', containerId)
+  return buildContainerPortMappingsFromEndpoints(customRows)
 }
 
 async function syncRedisForContainerDomains(containerId: string) {
@@ -170,20 +133,13 @@ async function syncRedisForContainerDomains(containerId: string) {
   const routePort = server.agentMode === 'self_hosted' ? 80 : config.CERTS_PATH ? 443 : 8899
   const routeTarget = JSON.stringify({ ip: server.ipAddress, port: routePort })
   const routing = await resolveCustomDomainRoutingForOwner('container', containerId)
-  const [zoneployRows, customRows] = await Promise.all([
-    listZoneployEndpoints('container', containerId),
-    listCustomEndpoints('container', containerId),
-  ])
+  const customRows = await listCustomEndpoints('container', containerId)
 
-  for (const endpoint of zoneployRows) {
-    await redis.hset(REDIS_KEYS.routesHash, getZoneployFullDomain('container', endpoint.hostnameLabel), routeTarget)
-  }
+  if (routing.mode !== 'server') return
 
-  if (routing.mode === 'platform') {
-    for (const endpoint of customRows) {
-      if (!endpoint.verified) continue
-      await redis.hset(REDIS_KEYS.routesHash, endpoint.hostname, routeTarget)
-    }
+  for (const endpoint of customRows) {
+    if (!endpoint.verified) continue
+    await redis.hset(REDIS_KEYS.routesHash, endpoint.hostname, routeTarget)
   }
 }
 
@@ -215,49 +171,11 @@ async function syncContainerRuntimeRoutes(containerId: string) {
 }
 
 async function getContainerEndpointCounts(containerId: string) {
-  const [zoneployRows, customRows] = await Promise.all([
-    listZoneployEndpoints('container', containerId),
-    listCustomEndpoints('container', containerId),
-  ])
+  const customRows = await listCustomEndpoints('container', containerId)
 
   return {
-    zoneployRows,
     customRows,
-    total: zoneployRows.length + customRows.length,
-  }
-}
-
-async function assertUniqueContainerZoneployPort(containerId: string, port: number, currentId?: string) {
-  const [existing] = await db
-    .select({ id: zoneployPublicEndpoints.id })
-    .from(zoneployPublicEndpoints)
-    .where(and(
-      eq(zoneployPublicEndpoints.ownerType, 'container'),
-      eq(zoneployPublicEndpoints.ownerId, containerId),
-      eq(zoneployPublicEndpoints.port, port),
-      isNull(zoneployPublicEndpoints.deletedAt),
-      ...(currentId ? [ne(zoneployPublicEndpoints.id, currentId)] : []),
-    ))
-    .limit(1)
-
-  if (existing) {
-    throw new AppError(409, 'ZONEPLOY_PORT_ALREADY_EXISTS', `Port ${port} already has a Zoneploy domain in this container`)
-  }
-}
-
-async function assertUniqueContainerZoneployHostname(hostnameLabel: string, currentId?: string) {
-  const [existing] = await db
-    .select({ id: zoneployPublicEndpoints.id })
-      .from(zoneployPublicEndpoints)
-    .where(and(
-      eq(zoneployPublicEndpoints.hostnameLabel, hostnameLabel),
-      isNull(zoneployPublicEndpoints.deletedAt),
-      ...(currentId ? [ne(zoneployPublicEndpoints.id, currentId)] : []),
-    ))
-    .limit(1)
-
-  if (existing) {
-    throw new AppError(409, 'ZONEPLOY_HOSTNAME_IN_USE', `Subdomain ${hostnameLabel} is already in use`)
+    total: customRows.length,
   }
 }
 
@@ -282,12 +200,9 @@ async function assertUniqueContainerCustomHostname(containerId: string, hostname
 export async function getDomain(orgId: string, containerId: string) {
   await getContainerRow(orgId, containerId)
   await syncContainerRuntimeRoutes(containerId).catch(() => false)
-  const [zoneployRows, customRows] = await Promise.all([
-    listZoneployEndpoints('container', containerId),
-    listCustomEndpoints('container', containerId),
-  ])
+  const customRows = await listCustomEndpoints('container', containerId)
 
-  const preferredHost = getPreferredPublicHost('container', zoneployRows, customRows)
+  const preferredHost = getPreferredPublicHost(customRows)
   return preferredHost
     ? {
         hostname: preferredHost.hostname,
@@ -302,124 +217,10 @@ export async function listDomains(orgId: string, containerId: string) {
   return listContainerDomainsWithDeps(containerId, {
     syncRuntime: syncContainerRuntimeRoutes,
     resolveRouting: (id) => resolveCustomDomainRoutingForOwner('container', id),
-    listZoneployRows: (id) => listZoneployEndpoints('container', id),
     listCustomRows: (id) => listCustomEndpoints('container', id),
-    formatZoneployEndpoint,
     formatCustomEndpoint,
     formatCustomRouting,
   })
-}
-
-export async function addZoneployEndpoint(orgId: string, containerId: string, port: number) {
-  await getContainerRow(orgId, containerId)
-  const counts = await getContainerEndpointCounts(containerId)
-  return addContainerZoneployEndpointWithDeps(containerId, generateZoneploySlug(), counts.total, port, {
-    buildHostnameLabel: (slug) => buildZoneployHostnameLabel('container', slug),
-    assertUniquePort: assertUniqueContainerZoneployPort,
-    assertUniqueHostnameLabel: assertUniqueContainerZoneployHostname,
-    persistCreate: async (values) => {
-      const [created] = await db
-        .insert(zoneployPublicEndpoints)
-        .values({
-          orgId,
-          ownerType: 'container',
-          ownerId: containerId,
-          port: values.port,
-          hostnameLabel: values.hostnameLabel,
-          isPrimary: values.isPrimary,
-        })
-        .returning()
-      return created
-    },
-    syncRuntime: syncContainerRuntimeRoutes,
-    formatZoneployEndpoint,
-  })
-}
-
-export async function updateZoneployEndpoint(
-  orgId: string,
-  containerId: string,
-  endpointId: string,
-  updates: { port?: number; slug?: string },
-) {
-  await getContainerRow(orgId, containerId)
-
-  const [endpoint] = await db
-    .select()
-    .from(zoneployPublicEndpoints)
-    .where(and(
-      eq(zoneployPublicEndpoints.id, endpointId),
-      eq(zoneployPublicEndpoints.ownerType, 'container'),
-      eq(zoneployPublicEndpoints.ownerId, containerId),
-      isNull(zoneployPublicEndpoints.deletedAt),
-    ))
-    .limit(1)
-
-  if (!endpoint) throw new NotFoundError('Zoneploy endpoint not found')
-
-  return updateContainerZoneployEndpointWithDeps(
-    containerId,
-    endpoint,
-    getContainerZoneploySlug(endpoint.hostnameLabel),
-    updates,
-    {
-      validateZoneploySlug: assertValidZoneploySlug,
-      buildHostnameLabel: (slug) => buildZoneployHostnameLabel('container', slug),
-      removeHostsFromRedis,
-      assertUniquePort: assertUniqueContainerZoneployPort,
-      assertUniqueHostnameLabel: assertUniqueContainerZoneployHostname,
-      persistUpdate: async (id, next) => {
-        const [updated] = await db
-          .update(zoneployPublicEndpoints)
-          .set({
-            port: next.port,
-            hostnameLabel: next.hostnameLabel,
-            updatedAt: new Date(),
-          })
-          .where(eq(zoneployPublicEndpoints.id, id))
-          .returning()
-        return updated
-      },
-      syncRuntime: syncContainerRuntimeRoutes,
-      formatZoneployEndpoint,
-    },
-  )
-}
-
-export async function removeZoneployEndpoint(orgId: string, containerId: string, endpointId: string) {
-  await getContainerRow(orgId, containerId)
-
-  const [endpoint] = await db
-    .select()
-    .from(zoneployPublicEndpoints)
-    .where(and(
-      eq(zoneployPublicEndpoints.id, endpointId),
-      eq(zoneployPublicEndpoints.ownerType, 'container'),
-      eq(zoneployPublicEndpoints.ownerId, containerId),
-      isNull(zoneployPublicEndpoints.deletedAt),
-    ))
-    .limit(1)
-
-  if (!endpoint) throw new NotFoundError('Zoneploy endpoint not found')
-
-  await removeContainerZoneployEndpointWithDeps(containerId, endpoint, {
-    removeHostsFromRedis,
-    deleteEndpoint: async (id) => {
-      await db
-        .update(zoneployPublicEndpoints)
-        .set({
-          isPrimary: false,
-          deletedAt: new Date(),
-          deleteReason: 'domain_removed',
-          updatedAt: new Date(),
-        })
-        .where(eq(zoneployPublicEndpoints.id, id))
-    },
-    promoteNextPrimary: promoteNextPrimaryPublicEndpoint,
-    syncRuntime: syncContainerRuntimeRoutes,
-  })
-
-  return formatZoneployEndpoint(endpoint)
 }
 
 export async function addCustomEndpoint(

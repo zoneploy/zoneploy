@@ -8,6 +8,13 @@
       "when": 1777147303183,
       "tag": "0000_cuddly_nick_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777342821295,
+      "tag": "0001_remove_zoneploy_public_endpoints",
+      "breakpoints": true
     }
   ]
 }

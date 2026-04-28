@@ -19,7 +19,6 @@ export type AuditAction =
   | 'role.created' | 'role.updated' | 'role.deleted'
   | 'secret.created' | 'secret.updated' | 'secret.deleted'
   | 'env_secret.created' | 'env_secret.updated' | 'env_secret.deleted'
-  | 'domain.zoneploy.created' | 'domain.zoneploy.updated' | 'domain.zoneploy.deleted'
   | 'domain.custom.created' | 'domain.custom.updated' | 'domain.custom.deleted' | 'domain.custom.verified'
   | 'addon.installed' | 'addon.configured' | 'addon.backend_action' | 'addon.uninstalled'
   | 'addon.bound' | 'addon.binding_configured' | 'addon.unbound'

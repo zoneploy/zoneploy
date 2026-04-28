@@ -176,7 +176,7 @@ export const routeLocalDeployment = async (
   const route: RouteDefinition = {
     host,
     protocol: request.protocol ?? "http",
-    source: request.source ?? "zoneploy-domain",
+    source: request.source ?? "custom-domain",
     target: {
       serviceName: deployment.name,
       containerName: deployment.containerName,
@@ -208,19 +208,6 @@ export const syncLocalDeploymentRoutes = async (
   const routes: RouteDefinition[] = [];
 
   for (const mapping of request.portMappings) {
-    for (const subdomain of mapping.zoneploySubdomains) {
-      routes.push({
-        host: normalizeHost(`${subdomain}.${request.platformDomain}`),
-        protocol: "http",
-        source: "zoneploy-domain",
-        target: {
-          serviceName: deployment.name,
-          containerName: deployment.containerName,
-          port: mapping.port,
-        },
-      });
-    }
-
     for (const hostname of mapping.customDomains) {
       routes.push({
         host: normalizeHost(hostname),
@@ -315,19 +302,6 @@ export const syncLocalStackRoutes = async (
     }
 
     const serviceKey = `${request.stackId}:${mapping.serviceName}`;
-
-    for (const subdomain of mapping.zoneploySubdomains) {
-      routes.push({
-        host: normalizeHost(`${subdomain}.${request.platformDomain}`),
-        protocol: "http",
-        source: "zoneploy-domain",
-        target: {
-          serviceName: serviceKey,
-          containerName: service.containerName,
-          port: mapping.port,
-        },
-      });
-    }
 
     for (const hostname of mapping.customDomains) {
       routes.push({

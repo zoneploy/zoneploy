@@ -2,33 +2,6 @@ import type { AddOnCatalogDefinition } from './types.js'
 
 export const ADDON_CATALOG: AddOnCatalogDefinition[] = [
   {
-    name: 'Custom Domains Edge',
-    slug: 'custom-domains-edge',
-    description: 'Terminates custom domains, certificates, and edge routing directly on the local server.',
-    category: 'networking',
-    controlPlane: 'agent',
-    installationScope: 'server',
-    bindingScopes: ['container', 'stack'],
-    capabilities: { customDomains: true, tls: true, httpRouting: true },
-    requirements: {
-      requiredCapabilities: ['linux', 'rootAccess', 'systemd', 'packageManagerSupported', 'dockerInstalled', 'dockerRunning'],
-      freeTcpPorts: [80, 443],
-    },
-    managedComponents: [
-      { name: 'Traefik', kind: 'proxy' },
-      { name: "Let's Encrypt", kind: 'certificate' },
-      { name: 'Docker network', kind: 'runtime' },
-      { name: 'Ports 80/443', kind: 'firewall' },
-    ],
-    uiMetadata: {
-      iconKey: 'globe',
-      logoKey: 'traefik',
-      accentColor: '#00B8D9',
-      summary: 'Controls Traefik, TLS and public HTTP routing on the selected VPS.',
-    },
-    isActive: true,
-  },
-  {
     name: 'Firewall Manager',
     slug: 'firewall-manager',
     description: 'Controls host firewall rules and shared TCP ports from the local server.',

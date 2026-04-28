@@ -1,5 +1,3 @@
-import { getZoneployRouterSubdomain } from '../../lib/public-endpoints.js'
-
 type StackLike = {
   id: string
   projectName: string
@@ -11,13 +9,6 @@ type StackLike = {
 type ServerStatusLike = {
   status: string
   agentMode?: string | null
-}
-
-type StackZoneployEndpointLike = {
-  id: string
-  port: number
-  hostnameLabel: string
-  isPrimary: boolean
 }
 
 type StackCustomEndpointLike = {
@@ -37,13 +28,11 @@ export type StackDomainMapping = {
   id: string
   serviceName: string
   port: number
-  zoneploySubdomains: string[]
   customDomains: string[]
   isPrimary: boolean
 }
 
 type BuildStackRouteMappingsDeps<ServerT = unknown> = {
-  listZoneployRows: (stackId: string) => Promise<StackZoneployEndpointLike[]>
   listCustomRows: (stackId: string) => Promise<StackCustomEndpointLike[]>
   resolvePublicEndpoint: (
     stack: Pick<StackLike, 'id' | 'projectName' | 'composeContent'>,
@@ -68,30 +57,9 @@ export async function buildStackRouteMappingsWithDeps<ServerT = unknown>(
   server?: ServerT | null,
   composeContentOverride?: string | null,
 ) {
-  const [zoneployRows, customRows] = await Promise.all([
-    deps.listZoneployRows(stack.id),
-    deps.listCustomRows(stack.id),
-  ])
+  const customRows = await deps.listCustomRows(stack.id)
 
   const grouped = new Map<string, StackDomainMapping>()
-
-  for (const endpoint of zoneployRows) {
-    const resolved = await deps.resolvePublicEndpoint(stack, endpoint.port, server, composeContentOverride)
-    if (!resolved.resolvedServiceName) continue
-
-    const key = `${resolved.resolvedServiceName}:${endpoint.port}`
-    const bucket = grouped.get(key) ?? {
-      id: endpoint.id,
-      serviceName: resolved.resolvedServiceName,
-      port: endpoint.port,
-      zoneploySubdomains: [],
-      customDomains: [],
-      isPrimary: false,
-    }
-    bucket.zoneploySubdomains.push(getZoneployRouterSubdomain('stack', endpoint.hostnameLabel))
-    bucket.isPrimary = bucket.isPrimary || endpoint.isPrimary
-    grouped.set(key, bucket)
-  }
 
   for (const endpoint of customRows) {
     if (!endpoint.verified) continue
@@ -104,7 +72,6 @@ export async function buildStackRouteMappingsWithDeps<ServerT = unknown>(
       id: endpoint.id,
       serviceName: resolved.resolvedServiceName,
       port: endpoint.port,
-      zoneploySubdomains: [],
       customDomains: [],
       isPrimary: false,
     }
@@ -113,7 +80,7 @@ export async function buildStackRouteMappingsWithDeps<ServerT = unknown>(
     grouped.set(key, bucket)
   }
 
-  return Array.from(grouped.values()).filter(mapping => mapping.zoneploySubdomains.length > 0 || mapping.customDomains.length > 0)
+  return Array.from(grouped.values()).filter(mapping => mapping.customDomains.length > 0)
 }
 
 export async function syncStackRuntimeRoutesWithDeps<ServerT extends ServerStatusLike = ServerStatusLike>(stackId: string, deps: SyncStackRuntimeRoutesDeps<ServerT>) {

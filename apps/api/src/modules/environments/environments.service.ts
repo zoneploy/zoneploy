@@ -7,13 +7,11 @@ import {
   environments,
   envSecrets,
   stacks,
-  zoneployPublicEndpoints,
 } from '../../db/schema.js'
 import { NotFoundError, ConflictError, ForbiddenError, AppError } from '../../lib/errors.js'
 import { generateSlug } from '../../lib/slug.js'
 import { encrypt, decrypt } from '../../lib/crypto.js'
 import { redis, REDIS_KEYS } from '../../lib/redis.js'
-import { getZoneployFullDomain } from '../../lib/public-endpoints.js'
 
 function formatEnv(e: typeof environments.$inferSelect, containerCount = 0, stackCount = 0) {
   return {
@@ -161,18 +159,11 @@ export async function deleteEnvironment(orgId: string, projectId: string, envId:
 
   const routeHosts: string[] = []
   for (const filter of ownerFilters) {
-    const [zoneployRows, customRows] = await Promise.all([
-      db
-        .select({ ownerType: zoneployPublicEndpoints.ownerType, hostnameLabel: zoneployPublicEndpoints.hostnameLabel })
-        .from(zoneployPublicEndpoints)
-        .where(and(eq(zoneployPublicEndpoints.ownerType, filter.ownerType), inArray(zoneployPublicEndpoints.ownerId, filter.ids), isNull(zoneployPublicEndpoints.deletedAt))),
-      db
-        .select({ hostname: customPublicEndpoints.hostname })
-        .from(customPublicEndpoints)
-        .where(and(eq(customPublicEndpoints.ownerType, filter.ownerType), inArray(customPublicEndpoints.ownerId, filter.ids), isNull(customPublicEndpoints.deletedAt))),
-    ])
+    const customRows = await db
+      .select({ hostname: customPublicEndpoints.hostname })
+      .from(customPublicEndpoints)
+      .where(and(eq(customPublicEndpoints.ownerType, filter.ownerType), inArray(customPublicEndpoints.ownerId, filter.ids), isNull(customPublicEndpoints.deletedAt)))
     routeHosts.push(
-      ...zoneployRows.map(endpoint => getZoneployFullDomain(endpoint.ownerType, endpoint.hostnameLabel)),
       ...customRows.map(endpoint => endpoint.hostname),
     )
   }
@@ -183,7 +174,6 @@ export async function deleteEnvironment(orgId: string, projectId: string, envId:
       ...(containerIds.length > 0
         ? [
             tx.update(addOnBindings).set({ status: 'disabled', deletedAt: now, deleteReason: 'environment_deleted', updatedAt: now }).where(and(eq(addOnBindings.ownerType, 'container'), inArray(addOnBindings.ownerId, containerIds), isNull(addOnBindings.deletedAt))),
-            tx.update(zoneployPublicEndpoints).set({ isPrimary: false, deletedAt: now, deleteReason: 'environment_deleted', updatedAt: now }).where(and(eq(zoneployPublicEndpoints.ownerType, 'container'), inArray(zoneployPublicEndpoints.ownerId, containerIds), isNull(zoneployPublicEndpoints.deletedAt))),
             tx.update(customPublicEndpoints).set({ isPrimary: false, verified: false, deletedAt: now, deleteReason: 'environment_deleted', updatedAt: now }).where(and(eq(customPublicEndpoints.ownerType, 'container'), inArray(customPublicEndpoints.ownerId, containerIds), isNull(customPublicEndpoints.deletedAt))),
             tx.update(containers).set({ status: 'stopped', deletedAt: now, updatedAt: now }).where(and(inArray(containers.id, containerIds), isNull(containers.deletedAt))),
           ]
@@ -191,7 +181,6 @@ export async function deleteEnvironment(orgId: string, projectId: string, envId:
       ...(stackIds.length > 0
         ? [
             tx.update(addOnBindings).set({ status: 'disabled', deletedAt: now, deleteReason: 'environment_deleted', updatedAt: now }).where(and(eq(addOnBindings.ownerType, 'stack'), inArray(addOnBindings.ownerId, stackIds), isNull(addOnBindings.deletedAt))),
-            tx.update(zoneployPublicEndpoints).set({ isPrimary: false, deletedAt: now, deleteReason: 'environment_deleted', updatedAt: now }).where(and(eq(zoneployPublicEndpoints.ownerType, 'stack'), inArray(zoneployPublicEndpoints.ownerId, stackIds), isNull(zoneployPublicEndpoints.deletedAt))),
             tx.update(customPublicEndpoints).set({ isPrimary: false, verified: false, deletedAt: now, deleteReason: 'environment_deleted', updatedAt: now }).where(and(eq(customPublicEndpoints.ownerType, 'stack'), inArray(customPublicEndpoints.ownerId, stackIds), isNull(customPublicEndpoints.deletedAt))),
             tx.update(stacks).set({ status: 'stopped', deletedAt: now, updatedAt: now }).where(and(inArray(stacks.id, stackIds), isNull(stacks.deletedAt))),
           ]

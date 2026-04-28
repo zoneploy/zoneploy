@@ -13,12 +13,15 @@ import {
   deployExternalImage,
   deployLocalGitStack,
   deployLocalStack,
+  applyFirewallManagerConfig,
+  getFirewallManagerState,
   inspectLocalDeployment,
   inspectStackService,
   listStackServices,
   removeLocalDeployment,
   removeLocalStack,
   runDeploymentLifecycleAction,
+  runFirewallManagerAction,
   runStackLifecycleAction,
   runStackServiceLifecycleAction,
   syncLocalDeploymentRoutes,
@@ -34,7 +37,6 @@ type AgentAuthServer = Pick<
 export interface PortMapping {
   port: number
   isPrimary: boolean
-  zoneploySubdomains: string[]
   customDomains: string[]
 }
 
@@ -87,7 +89,6 @@ export interface StackDomainMapping {
   id: string
   serviceName: string
   port: number
-  zoneploySubdomains: string[]
   customDomains: string[]
   isPrimary: boolean
 }
@@ -249,6 +250,12 @@ class WorkerClientError extends Error {
     super(message)
     this.name = 'WorkerClientError'
   }
+}
+
+function toWorkerClientError(error: unknown) {
+  if (error instanceof WorkerClientError) return error
+  const message = error instanceof Error ? error.message : 'Agent request failed'
+  return new WorkerClientError(400, 'ADDON_AGENT_ERROR', message)
 }
 
 export function getAgentAuthToken(server: AgentAuthServer): string {
@@ -482,43 +489,83 @@ export const workerClient = {
 
   listStackServiceFiles: async (_server: Server, _stackId: string, _projectName: string, _serviceName: string, _path: string) => [],
 
-  getAddonStatus: async (_server: Server, slug: string) => ({
-    slug,
-    status: 'active',
-    version: null,
-    config: {},
-    capabilities: {},
-    health: {},
-  }) satisfies AgentAddonState,
+  getAddonStatus: async (_server: Server, slug: string, currentConfig: Record<string, unknown> = {}) => {
+    if (slug === 'firewall-manager') {
+      try {
+        return await getFirewallManagerState(currentConfig)
+      } catch (error) {
+        throw toWorkerClientError(error)
+      }
+    }
+
+    return {
+      slug,
+      status: 'active',
+      version: null,
+      config: {},
+      capabilities: {},
+      health: {},
+    } satisfies AgentAddonState
+  },
 
   getServerPreflight: async (_server: Server) => collectPreflightReport(),
 
-  installAddon: async (_server: Server, slug: string, addonConfig: Record<string, unknown>) => ({
-    slug,
-    status: 'active',
-    version: null,
-    config: addonConfig,
-    capabilities: {},
-    health: {},
-  }) satisfies AgentAddonState,
+  installAddon: async (_server: Server, slug: string, addonConfig: Record<string, unknown>) => {
+    if (slug === 'firewall-manager') {
+      try {
+        return await applyFirewallManagerConfig(addonConfig)
+      } catch (error) {
+        throw toWorkerClientError(error)
+      }
+    }
 
-  configureAddon: async (_server: Server, slug: string, addonConfig: Record<string, unknown>) => ({
-    slug,
-    status: 'active',
-    version: null,
-    config: addonConfig,
-    capabilities: {},
-    health: {},
-  }) satisfies AgentAddonState,
+    return {
+      slug,
+      status: 'active',
+      version: null,
+      config: addonConfig,
+      capabilities: {},
+      health: {},
+    } satisfies AgentAddonState
+  },
 
-  runAddonAction: async (_server: Server, slug: string, _action: string, payload: Record<string, unknown>) => ({
-    slug,
-    status: 'active',
-    version: null,
-    config: payload,
-    capabilities: {},
-    health: {},
-  }) satisfies AgentAddonState,
+  configureAddon: async (_server: Server, slug: string, addonConfig: Record<string, unknown>) => {
+    if (slug === 'firewall-manager') {
+      try {
+        return await applyFirewallManagerConfig(addonConfig)
+      } catch (error) {
+        throw toWorkerClientError(error)
+      }
+    }
+
+    return {
+      slug,
+      status: 'active',
+      version: null,
+      config: addonConfig,
+      capabilities: {},
+      health: {},
+    } satisfies AgentAddonState
+  },
+
+  runAddonAction: async (_server: Server, slug: string, action: string, payload: Record<string, unknown>, currentConfig: Record<string, unknown> = {}) => {
+    if (slug === 'firewall-manager') {
+      try {
+        return await runFirewallManagerAction(action, payload, currentConfig)
+      } catch (error) {
+        throw toWorkerClientError(error)
+      }
+    }
+
+    return {
+      slug,
+      status: 'active',
+      version: null,
+      config: payload,
+      capabilities: {},
+      health: {},
+    } satisfies AgentAddonState
+  },
 
   uninstallAddon: async (_server: Server, slug: string) => ({
     slug,

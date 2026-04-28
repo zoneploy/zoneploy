@@ -2,20 +2,8 @@ import { apiClient } from '@/lib/api-client'
 
 export interface DomainInfo {
   hostname: string
-  kind: 'zoneploy' | 'custom'
+  kind: 'custom'
   verified: boolean
-}
-
-export interface ZoneployEndpointInfo {
-  id: string
-  containerId: string
-  port: number
-  slug: string
-  hostnameLabel: string
-  fullDomain: string
-  isPrimary: boolean
-  createdAt: string
-  updatedAt: string
 }
 
 export interface CustomEndpointInfo {
@@ -27,23 +15,20 @@ export interface CustomEndpointInfo {
   isPrimary: boolean
   dnsTarget: string
   dnsRecordType: 'A' | 'AAAA' | 'CNAME' | null
-  routingMode: 'platform' | 'server-addon' | 'disabled'
+  routingMode: 'server' | 'disabled'
   createdAt: string
   updatedAt: string
 }
 
 export interface CustomRoutingInfo {
-  mode: 'platform' | 'server-addon' | 'disabled'
+  mode: 'server' | 'disabled'
   enabled: boolean
-  addonSlug: string
   serverId: string | null
-  installationId: string | null
   dnsTarget: string
   dnsRecordType: 'A' | 'AAAA' | 'CNAME' | null
 }
 
 export interface ContainerDomainsResponse {
-  zoneploy: ZoneployEndpointInfo[]
   custom: CustomEndpointInfo[]
   customRouting: CustomRoutingInfo
 }
@@ -62,18 +47,6 @@ export const domainsApi = {
 
   listAll: (orgId: string, containerId: string) =>
     apiClient.get<ContainerDomainsResponse>(`/organizations/${orgId}/containers/${containerId}/domain/all`),
-
-  addZoneploy: (orgId: string, containerId: string, port: number) =>
-    apiClient.post<ZoneployEndpointInfo>(`/organizations/${orgId}/containers/${containerId}/domain/zoneploy`, { port }),
-
-  updateZoneploy: (orgId: string, containerId: string, endpointId: string, updates: { port?: number; slug?: string }) =>
-    apiClient.patch<ZoneployEndpointInfo>(
-      `/organizations/${orgId}/containers/${containerId}/domain/zoneploy/${endpointId}`,
-      updates,
-    ),
-
-  removeZoneploy: (orgId: string, containerId: string, endpointId: string) =>
-    apiClient.delete(`/organizations/${orgId}/containers/${containerId}/domain/zoneploy/${endpointId}`),
 
   addCustom: (orgId: string, containerId: string, payload: { port: number; customDomain: string }) =>
     apiClient.post<CustomEndpointInfo>(`/organizations/${orgId}/containers/${containerId}/domain/custom`, payload),

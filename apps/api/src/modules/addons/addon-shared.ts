@@ -9,10 +9,6 @@ import {
 } from '../../db/schema.js'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../lib/errors.js'
 import { WorkerClientError, workerClient } from '../../lib/worker-client.js'
-import {
-  buildCustomDomainsEdgeInstallConfig,
-  CUSTOM_DOMAINS_EDGE_SLUG,
-} from '../../lib/custom-domain-routing.js'
 import { AGENT_MANAGED_ADDON_SLUGS } from './catalog/index.js'
 
 export type OwnerType = 'container' | 'stack'
@@ -189,10 +185,6 @@ export function buildDesiredAddonConfig(
   server: Awaited<ReturnType<typeof ensureServerOwned>>,
   configValue: Record<string, unknown>,
 ) {
-  if (addonSlug === CUSTOM_DOMAINS_EDGE_SLUG) {
-    return buildCustomDomainsEdgeInstallConfig(server.ipAddress, configValue)
-  }
-
   if (addonSlug === FIREWALL_MANAGER_SLUG) {
     const enabled = typeof configValue.enabled === 'boolean' ? configValue.enabled : true
     const sshPort = typeof server.sshPort === 'number' ? server.sshPort : DEFAULT_FIREWALL_MANAGER_SSH_PORT
@@ -345,13 +337,6 @@ export function assertAddonRequirementsCompatible(
   const evaluation = evaluateAddonRequirements(addon.requirements, server.capabilities)
   if (evaluation.compatible) return
 
-  if (addon.slug === CUSTOM_DOMAINS_EDGE_SLUG && evaluation.occupiedPorts.some(port => port === 80 || port === 443)) {
-    throw new ValidationError(
-      'Ports 80 and/or 443 are already in use on the selected server.',
-      'EDGE_PORTS_IN_USE',
-    )
-  }
-
   const problems = [
     ...(evaluation.missingCapabilities.length > 0
       ? [`Missing capabilities: ${evaluation.missingCapabilities.join(', ')}`]
@@ -373,12 +358,13 @@ export async function syncInstallationFromAgent(
   addon: {
     slug: string
     capabilities: Record<string, unknown>
+    config?: Record<string, unknown>
   },
 ) {
   if (!isAgentManagedAddon(addon.slug) || server.status !== 'online') return null
 
   try {
-    const state = await workerClient.getAddonStatus(server as never, addon.slug)
+    const state = await workerClient.getAddonStatus(server as never, addon.slug, addon.config ?? {})
     if (!state) return null
     return persistAgentManagedState(installationId, addon.capabilities, state)
   } catch {

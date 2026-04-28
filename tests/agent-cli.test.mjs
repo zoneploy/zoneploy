@@ -29,7 +29,7 @@ test("agent addons command returns built-in addon manifests", () => {
   const addons = runAgent("addons");
   const slugs = addons.map((addon) => addon.slug);
 
-  assert.ok(slugs.includes("custom-domains-edge"));
+  assert.ok(!slugs.includes("custom-domains-edge"));
   assert.ok(slugs.includes("firewall-manager"));
 });
 

@@ -1,6 +1,6 @@
 export type RouteProtocol = "http" | "https";
 
-export type RouteSource = "zoneploy-domain" | "custom-domain";
+export type RouteSource = "custom-domain";
 
 export type RouteTarget = {
   serviceName: string;
@@ -30,7 +30,6 @@ export type LocalRouteRequest = {
 export type LocalRoutePortMapping = {
   port: number;
   isPrimary: boolean;
-  zoneploySubdomains: string[];
   customDomains: string[];
 };
 

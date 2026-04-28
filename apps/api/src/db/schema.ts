@@ -319,34 +319,6 @@ export const containerDeployments = pgTable(
 
 // Domains
 
-export const zoneployPublicEndpoints = pgTable(
-  'zoneploy_public_endpoints',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    orgId: uuid('org_id').notNull().references(() => organizations.id),
-    ownerType: text('owner_type', { enum: ['container', 'stack'] }).notNull(),
-    ownerId: uuid('owner_id').notNull(),
-    port: integer('port').notNull(),
-    hostnameLabel: text('hostname_label').notNull(),
-    isPrimary: boolean('is_primary').notNull().default(false),
-    deletedAt: timestamp('deleted_at'),
-    deletedByUserId: uuid('deleted_by_user_id').references(() => users.id),
-    deleteReason: text('delete_reason'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
-  },
-  table => [
-    check(
-      'zoneploy_public_endpoints_owner_type_check',
-      sql`${table.ownerType} in ('container', 'stack')`,
-    ),
-    index('zoneploy_public_endpoints_org_idx').on(table.orgId),
-    index('zoneploy_public_endpoints_owner_idx').on(table.ownerType, table.ownerId),
-    uniqueIndex('zoneploy_public_endpoints_hostname_active_idx').on(table.hostnameLabel).where(sql`${table.deletedAt} is null`),
-    uniqueIndex('zoneploy_public_endpoints_owner_port_active_idx').on(table.ownerType, table.ownerId, table.port).where(sql`${table.deletedAt} is null`),
-  ],
-)
-
 export const customPublicEndpoints = pgTable(
   'custom_public_endpoints',
   {

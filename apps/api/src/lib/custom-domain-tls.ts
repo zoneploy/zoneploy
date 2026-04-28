@@ -226,7 +226,7 @@ async function listVerifiedCustomDomains() {
 
   for (const endpoint of verifiedEndpoints) {
     const routing = await resolveCustomDomainRoutingForOwner(endpoint.ownerType, endpoint.ownerId)
-    if (routing.mode === 'platform') {
+    if (routing.mode === 'server') {
       domains.add(endpoint.domain)
     }
   }

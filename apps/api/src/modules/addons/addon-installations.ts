@@ -121,6 +121,7 @@ export async function getServerAddons(orgId: string, serverId: string) {
       syncInstallationFromAgent(row.id, server, {
         slug: row.slug,
         capabilities: row.capabilities as Record<string, unknown>,
+        config: row.config as Record<string, unknown>,
       }),
     ),
   )
@@ -315,7 +316,7 @@ export async function runServerAddonAction(
   let state: AgentManagedAddonState
   const actionPayload = buildAddonActionPayload(addon.slug, server, action, payload)
   try {
-    state = await workerClient.runAddonAction(server, addon.slug, action, actionPayload)
+    state = await workerClient.runAddonAction(server, addon.slug, action, actionPayload, existing.config as Record<string, unknown>)
   } catch (error) {
     rethrowAgentAddonError(error)
   }
