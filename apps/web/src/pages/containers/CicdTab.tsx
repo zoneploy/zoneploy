@@ -26,6 +26,14 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
   )
 }
 
+function getActionApiUrl() {
+  const configured = import.meta.env.VITE_API_URL ?? '/api/v1'
+  if (/^https?:\/\//i.test(configured)) return configured.replace(/\/$/, '')
+
+  const path = configured.startsWith('/') ? configured : `/${configured}`
+  return `${window.location.origin}${path}`.replace(/\/$/, '')
+}
+
 export function CicdTab({
   orgId,
   containerId,
@@ -40,7 +48,7 @@ export function CicdTab({
   const [tokenExists, setTokenExists] = useState(hasToken)
   const [confirmRevoke, setConfirmRevoke] = useState(false)
   const [confirmRegenerate, setConfirmRegenerate] = useState(false)
-  const apiUrl = import.meta.env.VITE_API_URL ?? 'https://api.zoneploy.com/api/v1'
+  const apiUrl = getActionApiUrl()
 
   const generate = useMutation({
     mutationFn: () => containersApi.generateDeployToken(orgId, containerId),

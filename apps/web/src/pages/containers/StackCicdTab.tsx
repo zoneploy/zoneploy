@@ -26,6 +26,14 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
   )
 }
 
+function getActionApiUrl() {
+  const configured = import.meta.env.VITE_API_URL ?? '/api/v1'
+  if (/^https?:\/\//i.test(configured)) return configured.replace(/\/$/, '')
+
+  const path = configured.startsWith('/') ? configured : `/${configured}`
+  return `${window.location.origin}${path}`.replace(/\/$/, '')
+}
+
 export function StackCicdTab({
   orgId,
   stackId,
@@ -38,7 +46,7 @@ export function StackCicdTab({
   const { t } = useTranslation()
   const [token, setToken] = useState<string | null>(null)
   const [tokenExists, setTokenExists] = useState(hasToken)
-  const apiUrl = import.meta.env.VITE_API_URL ?? 'https://api.zoneploy.com/api/v1'
+  const apiUrl = getActionApiUrl()
 
   const generate = useMutation({
     mutationFn: () => stacksApi.generateDeployToken(orgId, stackId),
