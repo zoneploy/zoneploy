@@ -33,6 +33,16 @@ interface HeartbeatBody {
   agentVersion?: string
 }
 
+const METRICS_HISTORY_RETENTION_MS = 24 * 60 * 60 * 1000
+const METRICS_HISTORY_RETENTION_SECONDS = 24 * 60 * 60
+const METRICS_HISTORY_MAX_POINTS = 1440
+
+async function pruneMetricsHistory(key: string, nowMs: number) {
+  await redis.zremrangebyscore(key, '-inf', nowMs - METRICS_HISTORY_RETENTION_MS)
+  await redis.zremrangebyrank(key, 0, -(METRICS_HISTORY_MAX_POINTS + 1))
+  await redis.expire(key, METRICS_HISTORY_RETENTION_SECONDS)
+}
+
 /**
  * Internal Platform routes, only called by Worker Agents.
  * Authenticated with agent tokens, not user JWTs.
@@ -98,8 +108,7 @@ export async function internalRoutes(app: FastifyInstance) {
       const entry = JSON.stringify({ cpu: body.server.cpuPercent, mem: body.server.memoryUsedMb, ts: now.getTime() })
       const histKey = REDIS_KEYS.metricsHistoryServer(serverId)
       await redis.zadd(histKey, now.getTime(), entry)
-      await redis.zremrangebyrank(histKey, 0, -1441)
-      await redis.expire(histKey, 25 * 3600)
+      await pruneMetricsHistory(histKey, now.getTime())
     }
 
     const containerUpdates: Array<{ containerId: string; cpuPercent: number; memoryUsedMb: number; status: string }> = []
@@ -117,11 +126,20 @@ export async function internalRoutes(app: FastifyInstance) {
           .where(and(eq(stacks.serverId, serverId), isNull(stacks.deletedAt))),
       ])
 
-      const containerMap = new Map(dbContainers.map(c => [c.dockerId?.slice(0, 12), c]))
+      const containerMap = new Map<string, typeof dbContainers[number]>()
+      for (const container of dbContainers) {
+        containerMap.set(container.id, container)
+        containerMap.set(`zoneploy-${container.id}`, container)
+        if (!container.dockerId) continue
+        containerMap.set(container.dockerId, container)
+        containerMap.set(container.dockerId.slice(0, 12), container)
+      }
       const stackMap = new Map(dbStacks.map(s => [s.projectName, s]))
 
       for (const agentContainer of body.containers) {
         const dbContainer = containerMap.get(agentContainer.dockerId)
+          ?? containerMap.get(agentContainer.dockerId.slice(0, 12))
+          ?? containerMap.get(agentContainer.name.replace(/^zoneploy-/, ''))
         if (dbContainer) {
           await redis.setex(
             REDIS_KEYS.containerMetrics(dbContainer.id),
@@ -148,8 +166,7 @@ export async function internalRoutes(app: FastifyInstance) {
             })
             const histKey = REDIS_KEYS.metricsHistoryContainer(dbContainer.id)
             await redis.zadd(histKey, now.getTime(), entry)
-            await redis.zremrangebyrank(histKey, 0, -1441)
-            await redis.expire(histKey, 25 * 3600)
+            await pruneMetricsHistory(histKey, now.getTime())
           }
 
           containerUpdates.push({
@@ -195,8 +212,7 @@ export async function internalRoutes(app: FastifyInstance) {
           })
           const histKey = REDIS_KEYS.metricsHistoryStackService(dbStack.id, agentContainer.composeService)
           await redis.zadd(histKey, now.getTime(), entry)
-          await redis.zremrangebyrank(histKey, 0, -1441)
-          await redis.expire(histKey, 25 * 3600)
+          await pruneMetricsHistory(histKey, now.getTime())
         }
 
         stackUpdates.push({

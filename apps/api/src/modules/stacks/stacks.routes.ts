@@ -526,7 +526,15 @@ export async function stackRoutes(app: FastifyInstance, options: { deps?: StackR
       return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Invalid path' } })
     }
     try {
-      return reply.send(await deps.listStackServiceFiles(orgId, stackId, serviceName, path))
+      const { stack, server } = await getStackForStreaming(orgId, stackId)
+      const agentToken = getAgentAuthToken(server)
+      const agentUrl = getAgentHttpUrl(server, `/agent/v1/stacks/${stack.id}/${stack.projectName}/services/${serviceName}/files?path=${encodeURIComponent(path)}`)
+      const agentRes = await fetch(agentUrl, {
+        headers: { Authorization: `Bearer ${agentToken}` },
+        signal: AbortSignal.timeout(30_000),
+      })
+      const data = await agentRes.json()
+      return reply.status(agentRes.status).send(data)
     } catch (err) {
       return handleStackRouteError(reply, err)
     }

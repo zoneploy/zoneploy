@@ -1,6 +1,11 @@
 import http from "node:http";
 import crypto from "node:crypto";
-import { loadAgentRuntimeConfig } from "@zoneploy/runtime";
+import { spawn } from "node:child_process";
+import {
+  findStackServiceContainer,
+  listDockerContainerFiles,
+  loadAgentRuntimeConfig,
+} from "@zoneploy/runtime";
 import { listAvailableAddons } from "./addons.js";
 import { getAuditReport } from "./audit.js";
 import { runLocalBuild } from "./builds.js";
@@ -20,7 +25,12 @@ import { getRouteSnapshot } from "./routes.js";
 import { runLocalRoute } from "./routes.js";
 import { getAgentStatus } from "./status.js";
 import { handleTerminalUpgrade } from "./terminal.js";
-import { handleMetricsStream, isMetricsStreamPath } from "./metrics.js";
+import {
+  collectContainerMetricsForReference,
+  collectStackServiceMetrics,
+  handleMetricsStream,
+  isMetricsStreamPath,
+} from "./metrics.js";
 
 type JsonHandler = (request: http.IncomingMessage) => Promise<unknown> | unknown;
 type JsonRoute = {
@@ -28,6 +38,14 @@ type JsonRoute = {
   public?: boolean;
   handler: JsonHandler;
 };
+
+type DynamicRuntimeRoute =
+  | { kind: "container-files"; reference: string }
+  | { kind: "container-logs"; reference: string }
+  | { kind: "container-metrics"; reference: string }
+  | { kind: "stack-files"; projectName: string; serviceName: string }
+  | { kind: "stack-logs"; projectName: string; serviceName: string }
+  | { kind: "stack-metrics"; projectName: string; serviceName: string };
 
 const json = (response: http.ServerResponse, statusCode: number, payload: unknown): void => {
   response.writeHead(statusCode, {
@@ -119,6 +137,202 @@ const readJsonBody = async <T>(request: http.IncomingMessage): Promise<T> => {
   }
 
   return JSON.parse(raw) as T;
+};
+
+const parseDynamicRuntimeRoute = (pathname: string): DynamicRuntimeRoute | null => {
+  const parts = pathname.split("/").filter(Boolean).map(decodeURIComponent);
+
+  if (
+    parts.length === 5 &&
+    parts[0] === "agent" &&
+    parts[1] === "v1" &&
+    parts[2] === "containers" &&
+    parts[4] === "files"
+  ) {
+    return { kind: "container-files", reference: parts[3]! };
+  }
+
+  if (
+    parts.length === 5 &&
+    parts[0] === "agent" &&
+    parts[1] === "v1" &&
+    parts[2] === "containers" &&
+    parts[4] === "logs"
+  ) {
+    return { kind: "container-logs", reference: parts[3]! };
+  }
+
+  if (
+    parts.length === 6 &&
+    parts[0] === "agent" &&
+    parts[1] === "v1" &&
+    parts[2] === "containers" &&
+    parts[4] === "metrics" &&
+    parts[5] === "current"
+  ) {
+    return { kind: "container-metrics", reference: parts[3]! };
+  }
+
+  if (
+    parts.length === 8 &&
+    parts[0] === "agent" &&
+    parts[1] === "v1" &&
+    parts[2] === "stacks" &&
+    parts[5] === "services" &&
+    parts[7] === "files"
+  ) {
+    return { kind: "stack-files", projectName: parts[4]!, serviceName: parts[6]! };
+  }
+
+  if (
+    parts.length === 8 &&
+    parts[0] === "agent" &&
+    parts[1] === "v1" &&
+    parts[2] === "stacks" &&
+    parts[5] === "services" &&
+    parts[7] === "logs"
+  ) {
+    return { kind: "stack-logs", projectName: parts[4]!, serviceName: parts[6]! };
+  }
+
+  if (
+    parts.length === 9 &&
+    parts[0] === "agent" &&
+    parts[1] === "v1" &&
+    parts[2] === "stacks" &&
+    parts[5] === "services" &&
+    parts[7] === "metrics" &&
+    parts[8] === "current"
+  ) {
+    return { kind: "stack-metrics", projectName: parts[4]!, serviceName: parts[6]! };
+  }
+
+  return null;
+};
+
+const stackServiceContainerName = async (
+  projectName: string,
+  serviceName: string,
+): Promise<string> => {
+  const service = await findStackServiceContainer(projectName, serviceName);
+  if (!service?.containerName) {
+    throw new Error("Stack service container not found.");
+  }
+  return service.containerName;
+};
+
+const resolveRuntimeContainerReference = async (route: DynamicRuntimeRoute): Promise<string> => {
+  if (
+    route.kind === "container-files" ||
+    route.kind === "container-logs" ||
+    route.kind === "container-metrics"
+  ) {
+    return route.reference;
+  }
+
+  return stackServiceContainerName(route.projectName, route.serviceName);
+};
+
+const parseTail = (value: string | null): number => {
+  const parsed = Number(value ?? "200");
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 10_000 ? parsed : 200;
+};
+
+const writeLogLine = (response: http.ServerResponse, line: string): void => {
+  if (!line.trim()) return;
+  const timestampMatch = line.match(/^(\S+)\s+(.*)$/);
+  const parsedTimestamp = timestampMatch ? Date.parse(timestampMatch[1]!) : Number.NaN;
+  const ts = Number.isFinite(parsedTimestamp)
+    ? new Date(parsedTimestamp).toISOString()
+    : new Date().toISOString();
+  const message = Number.isFinite(parsedTimestamp)
+    ? timestampMatch?.[2] ?? line
+    : line;
+
+  response.write(`data: ${JSON.stringify({ ts, message })}\n\n`);
+};
+
+const pipeLogStream = (
+  stream: NodeJS.ReadableStream,
+  response: http.ServerResponse,
+): void => {
+  let buffer = "";
+  stream.on("data", (chunk: Buffer | string) => {
+    buffer += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk;
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      writeLogLine(response, line);
+    }
+  });
+  stream.on("end", () => {
+    writeLogLine(response, buffer);
+    buffer = "";
+  });
+};
+
+const handleDynamicRuntimeRoute = async (
+  route: DynamicRuntimeRoute,
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+  url: URL,
+): Promise<void> => {
+  if (request.method !== "GET") {
+    methodNotAllowed(response);
+    return;
+  }
+
+  const reference = await resolveRuntimeContainerReference(route);
+
+  if (route.kind === "container-files" || route.kind === "stack-files") {
+    json(response, 200, await listDockerContainerFiles(reference, url.searchParams.get("path") ?? "/"));
+    return;
+  }
+
+  if (route.kind === "container-metrics") {
+    json(response, 200, await collectContainerMetricsForReference(route.reference));
+    return;
+  }
+
+  if (route.kind === "stack-metrics") {
+    json(response, 200, await collectStackServiceMetrics(route.projectName, route.serviceName));
+    return;
+  }
+
+  const tail = parseTail(url.searchParams.get("tail"));
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+    "x-accel-buffering": "no",
+  });
+
+  const child = spawn("docker", ["logs", "--timestamps", "--tail", String(tail), "-f", reference], {
+    windowsHide: true,
+  });
+
+  pipeLogStream(child.stdout, response);
+  pipeLogStream(child.stderr, response);
+
+  request.on("close", () => {
+    child.kill("SIGTERM");
+  });
+
+  child.on("error", (error) => {
+    if (!response.writableEnded) {
+      response.write(`event: error\ndata: ${JSON.stringify({ message: error.message })}\n\n`);
+      response.end();
+    }
+  });
+
+  child.on("close", (code) => {
+    if (code && code !== 0 && !response.writableEnded) {
+      response.write(`event: error\ndata: ${JSON.stringify({ message: "Docker logs failed." })}\n\n`);
+    }
+    if (!response.writableEnded) {
+      response.end();
+    }
+  });
 };
 
 const routeHandlers = new Map<string, JsonRoute>([
@@ -245,6 +459,41 @@ export const startAgentServer = async (): Promise<number> => {
 
         try {
           await handleMetricsStream(request, response, url);
+        } catch (error) {
+          if (!response.headersSent) {
+            json(response, 500, {
+              error: {
+                code: "INTERNAL_ERROR",
+                message: error instanceof Error ? error.message : "Unexpected error.",
+              },
+            });
+          } else if (!response.writableEnded) {
+            response.write(`event: error\ndata: ${JSON.stringify({
+              message: error instanceof Error ? error.message : "Unexpected error.",
+            })}\n\n`);
+            response.end();
+          }
+        }
+
+        return;
+      }
+
+      const dynamicRoute = parseDynamicRuntimeRoute(url.pathname);
+      if (dynamicRoute) {
+        if (!config.agentApiToken) {
+          authNotConfigured(response);
+          return;
+        }
+
+        const token = agentToken(request);
+
+        if (!token || !safeEquals(token, config.agentApiToken)) {
+          unauthorized(response);
+          return;
+        }
+
+        try {
+          await handleDynamicRuntimeRoute(dynamicRoute, request, response, url);
         } catch (error) {
           if (!response.headersSent) {
             json(response, 500, {

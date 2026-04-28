@@ -288,6 +288,27 @@ const collectContainerMetrics = async (target: Extract<ResolvedMetricsTarget, { 
   };
 };
 
+export const collectContainerMetricsForReference = async (reference: string): Promise<unknown> => {
+  const target = await resolveTarget({ kind: "container", reference });
+  if (target.kind !== "container") {
+    throw new Error("Container metrics are not available.");
+  }
+
+  return collectContainerMetrics(target);
+};
+
+export const collectStackServiceMetrics = async (
+  projectName: string,
+  serviceName: string,
+): Promise<unknown> => {
+  const target = await resolveTarget({ kind: "stack-service", projectName, serviceName });
+  if (target.kind !== "container") {
+    throw new Error("Stack service metrics are not available.");
+  }
+
+  return collectContainerMetrics(target);
+};
+
 const writeSse = (response: http.ServerResponse, payload: unknown): void => {
   response.write(`data: ${JSON.stringify(payload)}\n\n`);
 };

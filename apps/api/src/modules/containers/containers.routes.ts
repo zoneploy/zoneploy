@@ -550,7 +550,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
       const { container, server } = await getContainerForStreaming(orgId, containerId)
       const agentToken = getAgentAuthToken(server)
 
-      const agentUrl = getAgentHttpUrl(server, `/agent/v1/containers/${containerId}/logs?tail=${tail}`)
+      const agentUrl = getAgentHttpUrl(server, `/agent/v1/containers/${container.dockerId}/logs?tail=${tail}`)
       const agentRes = await fetch(agentUrl, {
         headers: { Authorization: `Bearer ${agentToken}` },
         signal: AbortSignal.timeout(300_000), // 5 min maximum.

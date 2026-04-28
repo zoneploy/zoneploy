@@ -20,6 +20,7 @@ import { config } from '../../config.js'
 import { generateDeployToken, hashDeployToken } from '../../lib/deploy-token.js'
 import { getEnvSecretsDecrypted } from '../environments/environments.service.js'
 import type { CreateContainerInput, UpdateContainerInput } from '@zoneploy/types'
+import { getAgentAuthToken, getAgentHttpUrl } from '../../lib/worker-client.js'
 import type { GitBuildSource } from '../../lib/worker-client.js'
 import {
   getPreferredPublicHost,
@@ -542,8 +543,57 @@ export async function rollbackDeployment(orgId: string, containerId: string, dep
 // Metrics
 
 export async function getCurrentMetrics(orgId: string, containerId: string) {
+  const [container] = await db
+    .select({
+      id: containers.id,
+      dockerId: containers.dockerId,
+      serverId: containers.serverId,
+    })
+    .from(containers)
+    .where(and(eq(containers.id, containerId), eq(containers.orgId, orgId), isNull(containers.deletedAt)))
+    .limit(1)
+
+  if (!container) throw new NotFoundError('Container not found')
+
   const cached = await redis.get(REDIS_KEYS.containerMetrics(containerId))
   if (cached) return JSON.parse(cached)
+
+  if (container.dockerId && container.serverId) {
+    const [server] = await db.select().from(servers).where(eq(servers.id, container.serverId)).limit(1)
+    if (server && (server.status === 'online' || server.agentMode === 'self_hosted')) {
+      const agentRes = await fetch(
+        getAgentHttpUrl(server, `/agent/v1/containers/${container.dockerId}/metrics/current`),
+        {
+          headers: { Authorization: `Bearer ${getAgentAuthToken(server)}` },
+          signal: AbortSignal.timeout(8_000),
+        },
+      ).catch(() => null)
+
+      if (agentRes?.ok) {
+        const data = await agentRes.json() as {
+          cpuPercent: number
+          memoryUsedMb: number
+          diskReadMb?: number
+          diskWriteMb?: number
+          netRxMb?: number
+          netTxMb?: number
+          status?: string
+          ts?: string
+        }
+        return {
+          cpuPercent: data.cpuPercent,
+          memoryUsedMb: data.memoryUsedMb,
+          diskReadMb: data.diskReadMb ?? 0,
+          diskWriteMb: data.diskWriteMb ?? 0,
+          netRxMb: data.netRxMb ?? 0,
+          netTxMb: data.netTxMb ?? 0,
+          status: data.status ?? 'running',
+          recordedAt: data.ts ?? new Date().toISOString(),
+        }
+      }
+    }
+  }
+
   return null
 }
 

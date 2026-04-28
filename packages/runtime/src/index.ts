@@ -3,6 +3,7 @@ export * from "./builds.js";
 export * from "./cleanup.js";
 export * from "./commands.js";
 export * from "./config.js";
+export * from "./container-files.js";
 export * from "./debug.js";
 export * from "./deployments.js";
 export * from "./detect.js";

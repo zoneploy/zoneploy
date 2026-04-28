@@ -80,7 +80,16 @@ export const containersApi = {
     ),
 
   currentMetrics: (orgId: string, containerId: string) =>
-    apiClient.get<{ cpuPercent: number; memoryUsedMb: number; status: string; recordedAt: string } | null>(
+    apiClient.get<{
+      cpuPercent: number
+      memoryUsedMb: number
+      diskReadMb?: number
+      diskWriteMb?: number
+      netRxMb?: number
+      netTxMb?: number
+      status: string
+      recordedAt: string
+    } | null>(
       `/organizations/${orgId}/containers/${containerId}/metrics/current`,
     ),
 

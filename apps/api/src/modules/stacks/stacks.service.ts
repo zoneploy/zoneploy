@@ -14,7 +14,7 @@ import {
 import { redis, REDIS_KEYS } from '../../lib/redis.js'
 import { NotFoundError, ValidationError, AppError, ForbiddenError } from '../../lib/errors.js'
 import { generateSlug } from '../../lib/slug.js'
-import { workerClient } from '../../lib/worker-client.js'
+import { getAgentAuthToken, getAgentHttpUrl, workerClient } from '../../lib/worker-client.js'
 import type { AgentStackBackupStorageTarget, GitBuildSource } from '../../lib/worker-client.js'
 import { getStackAgentClient } from '../../lib/server-agent-client.js'
 import { encrypt, decrypt } from '../../lib/crypto.js'
@@ -1178,10 +1178,44 @@ export async function listStackServiceFiles(orgId: string, stackId: string, serv
 }
 
 export async function getCurrentStackServiceMetrics(orgId: string, stackId: string, serviceName: string) {
-  await assertStackServiceRuntime(orgId, stackId, serviceName)
+  const { stack, server } = await assertStackServiceRuntime(orgId, stackId, serviceName)
 
   const cached = await redis.get(REDIS_KEYS.stackServiceMetrics(stackId, serviceName))
   if (cached) return JSON.parse(cached)
+
+  if (server.status === 'online' || server.agentMode === 'self_hosted') {
+    const agentRes = await fetch(
+      getAgentHttpUrl(server, `/agent/v1/stacks/${stack.id}/${stack.projectName}/services/${serviceName}/metrics/current`),
+      {
+        headers: { Authorization: `Bearer ${getAgentAuthToken(server)}` },
+        signal: AbortSignal.timeout(8_000),
+      },
+    ).catch(() => null)
+
+    if (agentRes?.ok) {
+      const data = await agentRes.json() as {
+        cpuPercent: number
+        memoryUsedMb: number
+        diskReadMb?: number
+        diskWriteMb?: number
+        netRxMb?: number
+        netTxMb?: number
+        status?: string
+        ts?: string
+      }
+      return {
+        cpuPercent: data.cpuPercent,
+        memoryUsedMb: data.memoryUsedMb,
+        diskReadMb: data.diskReadMb ?? 0,
+        diskWriteMb: data.diskWriteMb ?? 0,
+        netRxMb: data.netRxMb ?? 0,
+        netTxMb: data.netTxMb ?? 0,
+        status: data.status ?? 'running',
+        recordedAt: data.ts ?? new Date().toISOString(),
+      }
+    }
+  }
+
   return null
 }
 
