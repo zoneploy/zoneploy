@@ -34,6 +34,7 @@ import {
   restartContainer,
   inspectContainer,
   getMetricsHistory,
+  recordContainerMetricsSample,
 } from './containers.service.js'
 
 interface ContainerRouteDeps {
@@ -57,6 +58,7 @@ interface ContainerRouteDeps {
   restartContainer?: typeof restartContainer
   inspectContainer?: typeof inspectContainer
   getMetricsHistory?: typeof getMetricsHistory
+  recordContainerMetricsSample?: typeof recordContainerMetricsSample
 }
 
 function handleContainerRouteError(reply: FastifyReply, err: unknown) {
@@ -88,6 +90,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
     restartContainer,
     inspectContainer,
     getMetricsHistory,
+    recordContainerMetricsSample,
     ...options.deps,
   }
   const allow = (permission: Permission, fallbackRole: Parameters<typeof defaultAuthorize>[0]) =>
@@ -355,7 +358,8 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
     try {
       const { container, server } = await getContainerForStreaming(orgId, containerId)
       const agentToken = getAgentAuthToken(server)
-      const agentUrl = getAgentHttpUrl(server, `/agent/v1/containers/${container.dockerId}/files?path=${encodeURIComponent(path)}`)
+      const reference = container.dockerId ?? container.id
+      const agentUrl = getAgentHttpUrl(server, `/agent/v1/containers/${reference}/files?path=${encodeURIComponent(path)}`)
       const agentRes = await fetch(agentUrl, {
         headers: { Authorization: `Bearer ${agentToken}` },
         signal: AbortSignal.timeout(30_000),
@@ -401,7 +405,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
       .where(and(eq(containers.id, containerId), eq(containers.orgId, orgId)))
       .limit(1)
 
-    if (!container?.dockerId || !container.serverId) {
+    if (!container || !container.serverId) {
       return reply.status(503).send({ error: { code: 'UNAVAILABLE', message: 'Container no disponible' } })
     }
 
@@ -429,7 +433,7 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
 
     try {
       const agentRes = await fetch(
-        getAgentHttpUrl(server, `/agent/v1/containers/${container.dockerId}/metrics/stream`),
+        getAgentHttpUrl(server, `/agent/v1/containers/${container.dockerId ?? container.id}/metrics/stream`),
         { headers: { Authorization: `Bearer ${agentToken}` }, signal: abortCtrl.signal },
       )
 
@@ -442,12 +446,40 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
       }
 
       const reader = agentRes.body.getReader()
+      const decoder = new TextDecoder()
+      let metricsFrameBuffer = ''
       req.raw.on('close', () => reader.cancel().catch(() => null))
+
+      const recordMetricFrames = (chunk: string) => {
+        metricsFrameBuffer += chunk
+        const frames = metricsFrameBuffer.split('\n\n')
+        metricsFrameBuffer = frames.pop() ?? ''
+        for (const frame of frames) {
+          const dataLines = frame
+            .split('\n')
+            .filter(line => line.startsWith('data: '))
+            .map(line => line.slice(6))
+          if (dataLines.length === 0) continue
+          try {
+            const sample = JSON.parse(dataLines.join('\n')) as {
+              cpuPercent?: unknown
+              memoryUsedMb?: unknown
+            }
+            if (typeof sample.cpuPercent === 'number' && typeof sample.memoryUsedMb === 'number') {
+              void deps.recordContainerMetricsSample(containerId, sample as Parameters<typeof recordContainerMetricsSample>[1]).catch(() => null)
+            }
+          } catch {
+            // Ignore malformed SSE frames from the agent.
+          }
+        }
+      }
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        if (!reply.raw.writableEnded) reply.raw.write(value)
+        const chunk = decoder.decode(value, { stream: true })
+        recordMetricFrames(chunk)
+        if (!reply.raw.writableEnded) reply.raw.write(chunk)
       }
     } catch (err) {
       if (!abortCtrl.signal.aborted && !reply.raw.writableEnded) {
@@ -549,8 +581,9 @@ export async function containerRoutes(app: FastifyInstance, options: { deps?: Co
     try {
       const { container, server } = await getContainerForStreaming(orgId, containerId)
       const agentToken = getAgentAuthToken(server)
+      const reference = container.dockerId ?? container.id
 
-      const agentUrl = getAgentHttpUrl(server, `/agent/v1/containers/${container.dockerId}/logs?tail=${tail}`)
+      const agentUrl = getAgentHttpUrl(server, `/agent/v1/containers/${reference}/logs?tail=${tail}`)
       const agentRes = await fetch(agentUrl, {
         headers: { Authorization: `Bearer ${agentToken}` },
         signal: AbortSignal.timeout(300_000), // 5 min maximum.

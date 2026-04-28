@@ -747,7 +747,7 @@ export function ContainerDetailPage() {
         <FilesTab
           orgId={orgId}
           containerId={container.id}
-          isRunning={container.status === 'running'}
+          isRunning={container.status !== 'waiting'}
         />
       )}
 

@@ -2,6 +2,7 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import {
+  findDeploymentByReference,
   findStackServiceContainer,
   listDockerContainerFiles,
   loadAgentRuntimeConfig,
@@ -227,7 +228,8 @@ const resolveRuntimeContainerReference = async (route: DynamicRuntimeRoute): Pro
     route.kind === "container-logs" ||
     route.kind === "container-metrics"
   ) {
-    return route.reference;
+    const deployment = await findDeploymentByReference(route.reference).catch(() => null);
+    return deployment?.containerName ?? deployment?.containerId ?? route.reference;
   }
 
   return stackServiceContainerName(route.projectName, route.serviceName);

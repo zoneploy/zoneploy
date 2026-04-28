@@ -542,6 +542,63 @@ export async function rollbackDeployment(orgId: string, containerId: string, dep
 
 // Metrics
 
+type AgentContainerMetricSample = {
+  cpuPercent: number
+  memoryUsedMb: number
+  diskReadMb?: number
+  diskWriteMb?: number
+  netRxMb?: number
+  netTxMb?: number
+  status?: string
+  ts?: string
+}
+
+const CONTAINER_METRICS_HISTORY_RETENTION_MS = 24 * 60 * 60 * 1000
+const CONTAINER_METRICS_HISTORY_RETENTION_SECONDS = 24 * 60 * 60
+const CONTAINER_METRICS_HISTORY_MAX_POINTS = 1440
+
+function metricTimestamp(value: string | undefined) {
+  const parsed = value ? Date.parse(value) : Number.NaN
+  return Number.isFinite(parsed) ? parsed : Date.now()
+}
+
+export async function recordContainerMetricsSample(containerId: string, sample: AgentContainerMetricSample) {
+  const ts = metricTimestamp(sample.ts)
+  const recordedAt = new Date(ts).toISOString()
+  const normalized = {
+    cpuPercent: sample.cpuPercent,
+    memoryUsedMb: sample.memoryUsedMb,
+    diskReadMb: sample.diskReadMb ?? 0,
+    diskWriteMb: sample.diskWriteMb ?? 0,
+    netRxMb: sample.netRxMb ?? 0,
+    netTxMb: sample.netTxMb ?? 0,
+    status: sample.status ?? 'running',
+    recordedAt,
+  }
+
+  await redis.setex(REDIS_KEYS.containerMetrics(containerId), 60, JSON.stringify(normalized))
+
+  const lockKey = REDIS_KEYS.metricsHistoryLock(`container:${containerId}`)
+  const canWriteHistory = await redis.set(lockKey, '1', 'NX', 'EX', 60)
+  if (canWriteHistory) {
+    const histKey = REDIS_KEYS.metricsHistoryContainer(containerId)
+    await redis.zadd(histKey, ts, JSON.stringify({
+      cpu: normalized.cpuPercent,
+      mem: normalized.memoryUsedMb,
+      dr: normalized.diskReadMb,
+      dw: normalized.diskWriteMb,
+      nr: normalized.netRxMb,
+      nt: normalized.netTxMb,
+      ts,
+    }))
+    await redis.zremrangebyscore(histKey, '-inf', Date.now() - CONTAINER_METRICS_HISTORY_RETENTION_MS)
+    await redis.zremrangebyrank(histKey, 0, -(CONTAINER_METRICS_HISTORY_MAX_POINTS + 1))
+    await redis.expire(histKey, CONTAINER_METRICS_HISTORY_RETENTION_SECONDS)
+  }
+
+  return normalized
+}
+
 export async function getCurrentMetrics(orgId: string, containerId: string) {
   const [container] = await db
     .select({
@@ -558,11 +615,12 @@ export async function getCurrentMetrics(orgId: string, containerId: string) {
   const cached = await redis.get(REDIS_KEYS.containerMetrics(containerId))
   if (cached) return JSON.parse(cached)
 
-  if (container.dockerId && container.serverId) {
+  if (container.serverId) {
     const [server] = await db.select().from(servers).where(eq(servers.id, container.serverId)).limit(1)
     if (server && (server.status === 'online' || server.agentMode === 'self_hosted')) {
+      const reference = container.dockerId ?? container.id
       const agentRes = await fetch(
-        getAgentHttpUrl(server, `/agent/v1/containers/${container.dockerId}/metrics/current`),
+        getAgentHttpUrl(server, `/agent/v1/containers/${reference}/metrics/current`),
         {
           headers: { Authorization: `Bearer ${getAgentAuthToken(server)}` },
           signal: AbortSignal.timeout(8_000),
@@ -570,26 +628,7 @@ export async function getCurrentMetrics(orgId: string, containerId: string) {
       ).catch(() => null)
 
       if (agentRes?.ok) {
-        const data = await agentRes.json() as {
-          cpuPercent: number
-          memoryUsedMb: number
-          diskReadMb?: number
-          diskWriteMb?: number
-          netRxMb?: number
-          netTxMb?: number
-          status?: string
-          ts?: string
-        }
-        return {
-          cpuPercent: data.cpuPercent,
-          memoryUsedMb: data.memoryUsedMb,
-          diskReadMb: data.diskReadMb ?? 0,
-          diskWriteMb: data.diskWriteMb ?? 0,
-          netRxMb: data.netRxMb ?? 0,
-          netTxMb: data.netTxMb ?? 0,
-          status: data.status ?? 'running',
-          recordedAt: data.ts ?? new Date().toISOString(),
-        }
+        return recordContainerMetricsSample(containerId, await agentRes.json() as AgentContainerMetricSample)
       }
     }
   }
@@ -614,6 +653,21 @@ export async function getMetricsHistory(orgId: string, containerId: string, peri
     since,
     '+inf',
   )
+
+  if (raw.length === 0) {
+    const current = await getCurrentMetrics(orgId, containerId)
+    if (current && 'cpuPercent' in current) {
+      return [{
+        cpuPercent: current.cpuPercent,
+        memoryUsedMb: current.memoryUsedMb,
+        diskReadMb: current.diskReadMb ?? 0,
+        diskWriteMb: current.diskWriteMb ?? 0,
+        netRxMb: current.netRxMb ?? 0,
+        netTxMb: current.netTxMb ?? 0,
+        recordedAt: current.recordedAt,
+      }]
+    }
+  }
 
   return raw.map((r: string) => {
     const parsed = JSON.parse(r) as { cpu: number; mem: number; dr?: number; dw?: number; nr?: number; nt?: number; ts: number }
@@ -650,7 +704,6 @@ export async function getContainerForStreaming(orgId: string, containerId: strin
 
   if (!container) throw new NotFoundError('Container not found')
   if (!container.serverId) throw new ForbiddenError('The container does not have a server assigned')
-  if (!container.dockerId) throw new ForbiddenError('The container is not running')
 
   const [server] = await db
     .select()
