@@ -1,9 +1,6 @@
 import { Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-
-export function copyToClipboard(text: string) {
-  return navigator.clipboard.writeText(text)
-}
+import { copyTextToClipboard } from '@/lib/clipboard'
 
 export function sanitizePort(value: string) {
   return value.replace(/[^\d]/g, '').slice(0, 5)
@@ -88,7 +85,7 @@ export function DnsRecordCard({
           <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-disabled">{t('domains.dnsValue')}</p>
           <button
             type="button"
-            onClick={() => copyToClipboard(target)}
+            onClick={() => copyTextToClipboard(target)}
             className="flex w-full items-center justify-between gap-2 rounded-lg border border-grey-100 bg-background-paper px-3 py-2 text-left font-mono text-xs text-text-primary transition-colors hover:border-primary/40 hover:text-primary"
           >
             <span className="min-w-0 truncate">{target}</span>

@@ -5,13 +5,14 @@ import { Copy, RefreshCw, Trash2, Check, Terminal } from 'lucide-react'
 import { stacksApi } from '@/api/stacks'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { copyTextToClipboard } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 
 function CopyButton({ text, className }: { text: string; className?: string }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
-  const copy = () => {
-    navigator.clipboard.writeText(text)
+  const copy = async () => {
+    if (!(await copyTextToClipboard(text))) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

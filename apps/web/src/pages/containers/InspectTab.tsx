@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight, ChevronDown, Copy, Check, Loader } from 'lucide-react'
 import { containersApi } from '@/api/containers'
+import { copyTextToClipboard } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 
 // JSON tree colapsable
@@ -75,8 +76,8 @@ export function InspectTab({ orgId, containerId }: { orgId: string; containerId:
     staleTime: 10_000,
   })
 
-  const copyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(data, null, 2))
+  const copyJson = async () => {
+    if (!(await copyTextToClipboard(JSON.stringify(data, null, 2)))) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight, ChevronDown, Copy, Check, Loader } from 'lucide-react'
 import { stacksApi } from '@/api/stacks'
+import { copyTextToClipboard } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 
 function JsonNode({ value, depth = 0 }: { value: unknown; depth?: number }) {
@@ -72,8 +73,8 @@ export function StackInspectTab({ orgId, stackId, serviceName }: { orgId: string
     staleTime: 10_000,
   })
 
-  const copyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(data, null, 2))
+  const copyJson = async () => {
+    if (!(await copyTextToClipboard(JSON.stringify(data, null, 2)))) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

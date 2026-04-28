@@ -19,6 +19,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { OtpInput } from '@/components/ui/OtpInput'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { LoadingState } from '@/components/ui/spinner'
+import { copyTextToClipboard } from '@/lib/clipboard'
 
 // API helpers
 
@@ -289,9 +290,9 @@ function TotpSection({ enabled, onToggle }: { enabled: boolean; onToggle: (enabl
     onError: (e) => setFeedback({ type: 'error', msg: (e as Error).message }),
   })
 
-  const copySecret = () => {
+  const copySecret = async () => {
     if (qrData?.secret) {
-      navigator.clipboard.writeText(qrData.secret)
+      if (!(await copyTextToClipboard(qrData.secret))) return
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }

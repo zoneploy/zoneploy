@@ -28,6 +28,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { ContainerStatusBadge } from '@/components/shared/ContainerStatusBadge'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { copyTextToClipboard } from '@/lib/clipboard'
 
 /** registry.host/org/name:tag -> registry.host/tag */
 function formatImage(image: string | null): string {
@@ -181,9 +182,9 @@ function CreateContainerForm({ orgId, onClose }: { orgId: string; onClose: () =>
     setValue('serverId', v as `${string}-${string}-${string}-${string}-${string}`)
   }
 
-  const copyToken = () => {
+  const copyToken = async () => {
     if (!deployToken) return
-    navigator.clipboard.writeText(deployToken)
+    if (!(await copyTextToClipboard(deployToken))) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -288,9 +289,9 @@ function CreateStackForm({ orgId, onClose }: { orgId: string; onClose: () => voi
     setValue('serverId', v as `${string}-${string}-${string}-${string}-${string}`)
   }
 
-  const copyToken = () => {
+  const copyToken = async () => {
     if (!deployToken) return
-    navigator.clipboard.writeText(deployToken)
+    if (!(await copyTextToClipboard(deployToken))) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
